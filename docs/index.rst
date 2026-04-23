@@ -25,13 +25,6 @@ and visualization.
 
 .. toctree::
    :maxdepth: 2
-   :caption: Pipeline Specification
-
-   Overview <pipeline/overview>
-   Pipeline Workflow <pipeline/workflow>
-
-.. toctree::
-   :maxdepth: 2
    :caption: Parser Specification
 
    Overview <parser/overview>
@@ -45,6 +38,12 @@ and visualization.
    Overview <visualizer/overview>
    Core Class&Function <visualizer/core_class_and_function>
    Visualizer Workflow <visualizer/visualizer_workflow>
+
+.. toctree::
+   :maxdepth: 2
+   :caption:  Developer Guides
+
+   Overview <developer_guides/>
 
 Contribution
 -------------
