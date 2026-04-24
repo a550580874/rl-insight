@@ -14,37 +14,27 @@ and visualization.
    :caption: Overview
 
    RL Timeline quickstart <overview/RL_Timeline_quickstart>
-   Architecture & developer guideline <overview/architecture_and_guideline>
+   Architecture<overview/architecture>
 
 .. toctree::
    :maxdepth: 2
    :caption: Data Specification
 
    Data Specification and Format Guide <data/data_specification>
-   Data check <data/data_check>
 
 .. toctree::
    :maxdepth: 2
-   :caption: Pipeline Specification
+   :caption: Utils Specification
 
-   Overview <pipeline/overview>
-   Pipeline Workflow <pipeline/workflow>
-
-.. toctree::
-   :maxdepth: 2
-   :caption: Parser Specification
-
-   Overview <parser/overview>
-   Core Class&Function <parser/core_class_and_function>
-   Parse Workflow <parser/parse_workflow>
+   MSTX Preprocessing <utils/mstx_preprocessing>
 
 .. toctree::
    :maxdepth: 2
-   :caption:  Visualizer Specification
+   :caption: Developer Guides
 
-   Overview <visualizer/overview>
-   Core Class&Function <visualizer/core_class_and_function>
-   Visualizer Workflow <visualizer/visualizer_workflow>
+   Extending Guide <developer_guides/extending_guide>
+   BaseClusterParser Interface<developer_guides/baseclusterparser_interface>
+   DataRule Extending Guide <developer_guides/rule_extending_guide>
 
 Contribution
 -------------

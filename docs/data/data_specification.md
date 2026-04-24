@@ -5,7 +5,6 @@
 流水线在校验阶段会使用 `rl_insight.data.DataChecker` 注册的规则；通用规则见 [`rl_insight/data/rules.py`](../../rl_insight/data/rules.py)，VeRL 日志规则见 [`rl_insight/data/verl_log_rules.py`](../../rl_insight/data/verl_log_rules.py)。**具体校验项以代码为准**，部分规则可能尚未接入 `DataChecker.rules`，文档仅描述数据侧约定。
 
 ## 1. Torch Profiler 数据
-
 ### 1.1 目录结构
 
 ```text
@@ -13,6 +12,7 @@
 └── <role>/
     └── prof_*.json.gz
 ```
+参考：[`./rl-insight/data/torch_data`](../../data/torch_data)
 
 ### 1.2 文件内容要点
 
@@ -64,6 +64,7 @@
         └── ASCEND_PROFILER_OUTPUT/
             └── trace_view.json
 ```
+参考：[`./rl-insight/data/mstx_data`](../../data/mstx_data)
 
 ### 2.2 trace_view.json 要点
 
@@ -93,12 +94,31 @@
 ]
 ```
 
-## 3. 生成summary_event数据 格式示例
+### 2.4 输入数据要求
+MSTX 输入当前包含三类检查：
+
+- `PathExistsRule`  
+  检查输入对象是否为目录路径，且目录存在
+
+- `MstxJsonFileExistsRule`  
+  检查 `*_ascend_pt/ASCEND_PROFILER_OUTPUT/trace_view.json` 是否存在，并检查 `profiler_info_*.json` 是否存在
+
+- `MstxJsonFieldValidRule`  
+  检查相关 JSON 文件是否非空，并验证关键字段是否齐全
+
+其中：
+- `trace_view.json` 要求事件包含 `ph`、`name`、`pid`、`tid`
+- `profiler_info_*.json` 要求包含 `config`、`start_info`、`end_info`、`torch_npu_version`、`cann_version`、`rank_id`
+
+## 3. 输出生成summary_event数据
+
+### 3.1 格式示例
 
 ```
 <summary-event-data-path>/
 └── summary_event_dataframe_sample.json
 ```
+参考：[`./rl-insight/data/summary_event_data`](../../data/summary_event_data)
 
 解析后汇总生成的数据文件 summary_event_dataframe_sample.json，内容必须包含"role", "name", "rank_id", "start_time_ms", "end_time_ms"字段，文件内容示例：
 
@@ -126,6 +146,22 @@
   },
 ]
 ```
+
+### 3.2 输出数据校验
+输出侧校验的目标，是保证 parser 的产出能够被 visualizer 正常消费。
+
+当前 `SUMMARY_EVENT` 类型使用 `ParserOutputValidatorRule` 进行检查，重点包括：
+
+- 输出必须是 `pandas.DataFrame`
+- DataFrame 不能为空
+- 必须包含关键字段列：
+  - `role`
+  - `name`
+  - `rank_id`
+  - `start_time_ms`
+  - `end_time_ms`
+
+
 
 ## 4. VeRL 训练日志（可选校验）
 
