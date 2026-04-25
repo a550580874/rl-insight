@@ -25,12 +25,12 @@
 - 组织成 DataMap 列表
 
 ### 2.2. **输入&输出**
-- 输入`input_data`：实际为 profile 文件路径
+- 输入`input_data`：实际为 profile 文件存放的根路径
   - self.parser.run(self.config.input_path)
 - 输出`DataMap`，需包含以下字段
   - rank_id：当前 profiling 数据对应的 rank 编号
   - role：当前 rank 对应的任务角色，例如 rollout、actor、critic 等
-  - profiler_data_path：当前 rank 对应的实际 profiling 数据文件路径
+  - profiler_data_path：当前 rank 对应的实际 profiling 文件存放的根路径
 
 ## 3. `parse_analysis_data()`
 
@@ -44,11 +44,11 @@
 
 ### 3.2. 输入 & 输出
 
-- 输入 `profiler_data_path`：当前 rank 对应的实际 profiler 数据文件路径，取自`DataMap`。
+- 输入 `profiler_data_path`：当前 rank 对应的实际 profiler 文件存放的根路径，取自`DataMap`。
 
 - 输入 `rank_id`： 当前 profiling 数据对应的 rank 编号，取自`DataMap`。
 
-- 输入 `role`： 当前 rank 对应的任务角色，用于标识解析出的事件属于哪个 RL 任务阶段，例如 rollout、actor、critic 等，取自`DataMap`。
+- 输入 `role`： 当前 rank 对应的任务角色，用于标识解析出的事件属于哪个 RL 任务阶段，例如生成/计算/更新 Actor 等，取自`DataMap`。
 
 - 输出 `list[EventRow]`：当前 rank 解析得到的事件列表，每个 `EventRow` 至少应包含以下字段：
     - `name`：事件名称
