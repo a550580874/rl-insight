@@ -27,11 +27,6 @@
 ### 2.2. **输入&输出**
 - 输入`input_data`：实际为 profile 文件存放的根路径
   - self.parser.run(self.config.input_path)
-  - ```text
-<profile-data-path>/
-└── <role>/
-    └── prof_*.json.gz
-```
 - 输出`DataMap`，需包含以下字段
   - rank_id：当前 profiling 数据对应的 rank 编号
   - role：当前 rank 对应的任务角色，例如 rollout、actor、critic 等
