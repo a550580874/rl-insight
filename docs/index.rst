@@ -24,7 +24,7 @@ and visualization.
 
 .. toctree::
    :maxdepth: 2
-   :caption: Utils Specification
+   :caption: Utils
 
    MSTX Preprocessing <utils/mstx_preprocessing>
 
