@@ -1,0 +1,3539 @@
+{
+  "elements": {
+    "engine.vllm.metric.vllm_token_throughput": {
+      "kind": "Panel",
+      "spec": {
+        "id": 1,
+        "title": "vLLM: Token Throughput",
+        "description": "Number of tokens processed per second",
+        "links": [],
+        "data": {
+          "kind": "QueryGroup",
+          "spec": {
+            "queries": [
+              {
+                "kind": "PanelQuery",
+                "spec": {
+                  "query": {
+                    "kind": "DataQuery",
+                    "group": "prometheus",
+                    "version": "v0",
+                    "spec": {
+                      "editorMode": "code",
+                      "exemplar": true,
+                      "expr": "sum by (model_name, engine, replica) (rate(vllm:request_prompt_tokens_sum{model_name=~\"$vllm_model_name\", engine=~\"$workerid\", replica=~\"$replica\"}[$interval]))",
+                      "interval": "",
+                      "legendFormat": "Prompt Tokens/Sec - {{model_name}} - {{engine}} - replica {{replica}}",
+                      "queryType": "randomWalk",
+                      "range": true
+                    },
+                    "labels": {
+                      "grafana.app/export-label": "prometheus-1"
+                    }
+                  },
+                  "refId": "A",
+                  "hidden": false
+                }
+              },
+              {
+                "kind": "PanelQuery",
+                "spec": {
+                  "query": {
+                    "kind": "DataQuery",
+                    "group": "prometheus",
+                    "version": "v0",
+                    "spec": {
+                      "editorMode": "code",
+                      "exemplar": true,
+                      "expr": "sum by (model_name, engine, replica) (rate(vllm:generation_tokens_total{model_name=~\"$vllm_model_name\", engine=~\"$workerid\", replica=~\"$replica\"}[$interval]))",
+                      "interval": "",
+                      "legendFormat": "Generation Tokens/Sec - {{model_name}} - {{engine}} - replica {{replica}}",
+                      "queryType": "randomWalk",
+                      "range": true
+                    },
+                    "labels": {
+                      "grafana.app/export-label": "prometheus-1"
+                    }
+                  },
+                  "refId": "B",
+                  "hidden": false
+                }
+              }
+            ],
+            "transformations": [],
+            "queryOptions": {}
+          }
+        },
+        "vizConfig": {
+          "kind": "VizConfig",
+          "group": "timeseries",
+          "version": "13.0.2",
+          "spec": {
+            "options": {
+              "alertThreshold": true,
+              "annotations": {
+                "clustering": -1,
+                "multiLane": false
+              },
+              "legend": {
+                "calcs": [
+                  "lastNotNull"
+                ],
+                "displayMode": "table",
+                "placement": "bottom",
+                "showLegend": true
+              },
+              "tooltip": {
+                "hideZeros": false,
+                "mode": "multi",
+                "sort": "none"
+              }
+            },
+            "fieldConfig": {
+              "defaults": {
+                "unit": "tokens/s",
+                "min": 0,
+                "thresholds": {
+                  "mode": "absolute",
+                  "steps": [
+                    {
+                      "value": 0,
+                      "color": "green"
+                    },
+                    {
+                      "value": 80,
+                      "color": "red"
+                    }
+                  ]
+                },
+                "color": {
+                  "mode": "palette-classic"
+                },
+                "custom": {
+                  "axisBorderShow": false,
+                  "axisCenteredZero": false,
+                  "axisColorMode": "text",
+                  "axisLabel": "",
+                  "axisPlacement": "auto",
+                  "barAlignment": 0,
+                  "barWidthFactor": 0.6,
+                  "drawStyle": "line",
+                  "fillOpacity": 10,
+                  "gradientMode": "none",
+                  "hideFrom": {
+                    "legend": false,
+                    "tooltip": false,
+                    "viz": false
+                  },
+                  "insertNulls": false,
+                  "lineInterpolation": "linear",
+                  "lineWidth": 2,
+                  "pointSize": 5,
+                  "scaleDistribution": {
+                    "type": "linear"
+                  },
+                  "showPoints": "never",
+                  "showValues": false,
+                  "spanNulls": false,
+                  "stacking": {
+                    "group": "A",
+                    "mode": "none"
+                  },
+                  "thresholdsStyle": {
+                    "mode": "off"
+                  }
+                }
+              },
+              "overrides": [
+                {
+                  "matcher": {
+                    "id": "byName",
+                    "options": "MAX"
+                  },
+                  "properties": [
+                    {
+                      "id": "color",
+                      "value": {
+                        "fixedColor": "#1F60C4",
+                        "mode": "fixed"
+                      }
+                    },
+                    {
+                      "id": "custom.fillOpacity",
+                      "value": 0
+                    },
+                    {
+                      "id": "custom.stacking",
+                      "value": {
+                        "group": "A",
+                        "mode": "none"
+                      }
+                    },
+                    {
+                      "id": "custom.lineStyle",
+                      "value": {
+                        "dash": [
+                          10,
+                          10
+                        ],
+                        "fill": "dash"
+                      }
+                    }
+                  ]
+                },
+                {
+                  "matcher": {
+                    "id": "byName",
+                    "options": "MAX + PENDING"
+                  },
+                  "properties": [
+                    {
+                      "id": "color",
+                      "value": {
+                        "fixedColor": "#777777",
+                        "mode": "fixed"
+                      }
+                    },
+                    {
+                      "id": "custom.fillOpacity",
+                      "value": 0
+                    },
+                    {
+                      "id": "custom.stacking",
+                      "value": {
+                        "group": "A",
+                        "mode": "none"
+                      }
+                    },
+                    {
+                      "id": "custom.lineStyle",
+                      "value": {
+                        "dash": [
+                          10,
+                          10
+                        ],
+                        "fill": "dash"
+                      }
+                    }
+                  ]
+                },
+                {
+                  "matcher": {
+                    "id": "byValue",
+                    "options": {
+                      "op": "gte",
+                      "reducer": "allIsZero",
+                      "value": 0
+                    }
+                  },
+                  "properties": [
+                    {
+                      "id": "custom.hideFrom",
+                      "value": {
+                        "legend": true,
+                        "tooltip": true,
+                        "viz": false
+                      }
+                    }
+                  ]
+                }
+              ]
+            }
+          }
+        }
+      }
+    },
+    "engine.vllm.metric.vllm_time_per_output_token_latency": {
+      "kind": "Panel",
+      "spec": {
+        "id": 2,
+        "title": "vLLM: Time Per Output Token Latency",
+        "description": "Time per output token latency.",
+        "links": [],
+        "data": {
+          "kind": "QueryGroup",
+          "spec": {
+            "queries": [
+              {
+                "kind": "PanelQuery",
+                "spec": {
+                  "query": {
+                    "kind": "DataQuery",
+                    "group": "prometheus",
+                    "version": "v0",
+                    "spec": {
+                      "editorMode": "code",
+                      "exemplar": true,
+                      "expr": "histogram_quantile(0.99, sum by(le, model_name, engine) (rate(vllm:request_time_per_output_token_seconds_bucket{model_name=~\"$vllm_model_name\", engine=~\"$workerid\", replica=~\"$replica\"}[$interval])))",
+                      "interval": "",
+                      "legendFormat": "P99 - {{model_name}} - {{engine}} - replica $replica",
+                      "queryType": "randomWalk",
+                      "range": true
+                    },
+                    "labels": {
+                      "grafana.app/export-label": "prometheus-1"
+                    }
+                  },
+                  "refId": "A",
+                  "hidden": false
+                }
+              },
+              {
+                "kind": "PanelQuery",
+                "spec": {
+                  "query": {
+                    "kind": "DataQuery",
+                    "group": "prometheus",
+                    "version": "v0",
+                    "spec": {
+                      "editorMode": "code",
+                      "exemplar": true,
+                      "expr": "histogram_quantile(0.95, sum by(le, model_name, engine) (rate(vllm:request_time_per_output_token_seconds_bucket{model_name=~\"$vllm_model_name\", engine=~\"$workerid\", replica=~\"$replica\"}[$interval])))",
+                      "interval": "",
+                      "legendFormat": "P95 - {{model_name}} - {{engine}} - replica $replica",
+                      "queryType": "randomWalk",
+                      "range": true
+                    },
+                    "labels": {
+                      "grafana.app/export-label": "prometheus-1"
+                    }
+                  },
+                  "refId": "B",
+                  "hidden": false
+                }
+              },
+              {
+                "kind": "PanelQuery",
+                "spec": {
+                  "query": {
+                    "kind": "DataQuery",
+                    "group": "prometheus",
+                    "version": "v0",
+                    "spec": {
+                      "editorMode": "code",
+                      "exemplar": true,
+                      "expr": "histogram_quantile(0.9, sum by(le, model_name, engine) (rate(vllm:request_time_per_output_token_seconds_bucket{model_name=~\"$vllm_model_name\", engine=~\"$workerid\", replica=~\"$replica\"}[$interval])))",
+                      "interval": "",
+                      "legendFormat": "P90 - {{model_name}} - {{engine}} - replica $replica",
+                      "queryType": "randomWalk",
+                      "range": true
+                    },
+                    "labels": {
+                      "grafana.app/export-label": "prometheus-1"
+                    }
+                  },
+                  "refId": "C",
+                  "hidden": false
+                }
+              },
+              {
+                "kind": "PanelQuery",
+                "spec": {
+                  "query": {
+                    "kind": "DataQuery",
+                    "group": "prometheus",
+                    "version": "v0",
+                    "spec": {
+                      "editorMode": "code",
+                      "exemplar": true,
+                      "expr": "histogram_quantile(0.5, sum by(le, model_name, engine) (rate(vllm:request_time_per_output_token_seconds_bucket{model_name=~\"$vllm_model_name\", engine=~\"$workerid\", replica=~\"$replica\"}[$interval])))",
+                      "interval": "",
+                      "legendFormat": "P50 - {{model_name}} - {{engine}} - replica $replica",
+                      "queryType": "randomWalk",
+                      "range": true
+                    },
+                    "labels": {
+                      "grafana.app/export-label": "prometheus-1"
+                    }
+                  },
+                  "refId": "D",
+                  "hidden": false
+                }
+              },
+              {
+                "kind": "PanelQuery",
+                "spec": {
+                  "query": {
+                    "kind": "DataQuery",
+                    "group": "prometheus",
+                    "version": "v0",
+                    "spec": {
+                      "editorMode": "code",
+                      "exemplar": true,
+                      "expr": "(sum by(model_name, engine) (rate(vllm:request_time_per_output_token_seconds_sum{model_name=~\"$vllm_model_name\", engine=~\"$workerid\", replica=~\"$replica\"}[$interval]))\n/\nsum by(model_name, engine) (rate(vllm:request_time_per_output_token_seconds_count{model_name=~\"$vllm_model_name\", engine=~\"$workerid\", replica=~\"$replica\"}[$interval])))",
+                      "interval": "",
+                      "legendFormat": "Mean - {{model_name}} - {{engine}} - replica $replica",
+                      "queryType": "randomWalk",
+                      "range": true
+                    },
+                    "labels": {
+                      "grafana.app/export-label": "prometheus-1"
+                    }
+                  },
+                  "refId": "E",
+                  "hidden": false
+                }
+              }
+            ],
+            "transformations": [],
+            "queryOptions": {}
+          }
+        },
+        "vizConfig": {
+          "kind": "VizConfig",
+          "group": "timeseries",
+          "version": "13.0.2",
+          "spec": {
+            "options": {
+              "alertThreshold": true,
+              "annotations": {
+                "clustering": -1,
+                "multiLane": false
+              },
+              "legend": {
+                "calcs": [
+                  "lastNotNull"
+                ],
+                "displayMode": "table",
+                "placement": "bottom",
+                "showLegend": true,
+                "sortBy": "Last *",
+                "sortDesc": false
+              },
+              "tooltip": {
+                "hideZeros": false,
+                "mode": "multi",
+                "sort": "none"
+              }
+            },
+            "fieldConfig": {
+              "defaults": {
+                "unit": "s",
+                "min": 0,
+                "thresholds": {
+                  "mode": "absolute",
+                  "steps": [
+                    {
+                      "value": 0,
+                      "color": "green"
+                    },
+                    {
+                      "value": 80,
+                      "color": "red"
+                    }
+                  ]
+                },
+                "color": {
+                  "mode": "palette-classic"
+                },
+                "custom": {
+                  "axisBorderShow": false,
+                  "axisCenteredZero": false,
+                  "axisColorMode": "text",
+                  "axisLabel": "",
+                  "axisPlacement": "auto",
+                  "barAlignment": 0,
+                  "barWidthFactor": 0.6,
+                  "drawStyle": "line",
+                  "fillOpacity": 10,
+                  "gradientMode": "none",
+                  "hideFrom": {
+                    "legend": false,
+                    "tooltip": false,
+                    "viz": false
+                  },
+                  "insertNulls": false,
+                  "lineInterpolation": "linear",
+                  "lineWidth": 2,
+                  "pointSize": 5,
+                  "scaleDistribution": {
+                    "type": "linear"
+                  },
+                  "showPoints": "never",
+                  "showValues": false,
+                  "spanNulls": false,
+                  "stacking": {
+                    "group": "A",
+                    "mode": "none"
+                  },
+                  "thresholdsStyle": {
+                    "mode": "off"
+                  }
+                }
+              },
+              "overrides": [
+                {
+                  "matcher": {
+                    "id": "byName",
+                    "options": "MAX"
+                  },
+                  "properties": [
+                    {
+                      "id": "color",
+                      "value": {
+                        "fixedColor": "#1F60C4",
+                        "mode": "fixed"
+                      }
+                    },
+                    {
+                      "id": "custom.fillOpacity",
+                      "value": 0
+                    },
+                    {
+                      "id": "custom.stacking",
+                      "value": {
+                        "group": "A",
+                        "mode": "none"
+                      }
+                    },
+                    {
+                      "id": "custom.lineStyle",
+                      "value": {
+                        "dash": [
+                          10,
+                          10
+                        ],
+                        "fill": "dash"
+                      }
+                    }
+                  ]
+                },
+                {
+                  "matcher": {
+                    "id": "byName",
+                    "options": "MAX + PENDING"
+                  },
+                  "properties": [
+                    {
+                      "id": "color",
+                      "value": {
+                        "fixedColor": "#777777",
+                        "mode": "fixed"
+                      }
+                    },
+                    {
+                      "id": "custom.fillOpacity",
+                      "value": 0
+                    },
+                    {
+                      "id": "custom.stacking",
+                      "value": {
+                        "group": "A",
+                        "mode": "none"
+                      }
+                    },
+                    {
+                      "id": "custom.lineStyle",
+                      "value": {
+                        "dash": [
+                          10,
+                          10
+                        ],
+                        "fill": "dash"
+                      }
+                    }
+                  ]
+                },
+                {
+                  "matcher": {
+                    "id": "byValue",
+                    "options": {
+                      "op": "gte",
+                      "reducer": "allIsZero",
+                      "value": 0
+                    }
+                  },
+                  "properties": [
+                    {
+                      "id": "custom.hideFrom",
+                      "value": {
+                        "legend": true,
+                        "tooltip": true,
+                        "viz": false
+                      }
+                    }
+                  ]
+                }
+              ]
+            }
+          }
+        }
+      }
+    },
+    "engine.vllm.metric.vllm_cache_utilization": {
+      "kind": "Panel",
+      "spec": {
+        "id": 3,
+        "title": "vLLM: Cache Utilization",
+        "description": "Percentage of used cache blocks by vLLM.",
+        "links": [],
+        "data": {
+          "kind": "QueryGroup",
+          "spec": {
+            "queries": [
+              {
+                "kind": "PanelQuery",
+                "spec": {
+                  "query": {
+                    "kind": "DataQuery",
+                    "group": "prometheus",
+                    "version": "v0",
+                    "spec": {
+                      "editorMode": "code",
+                      "exemplar": true,
+                      "expr": "vllm:kv_cache_usage_perc{model_name=~\"$vllm_model_name\", engine=~\"$workerid\", replica=~\"$replica\"}",
+                      "interval": "",
+                      "legendFormat": "KV Cache Usage - {{model_name}} - {{engine}} - replica {{replica}}",
+                      "queryType": "randomWalk",
+                      "range": true
+                    },
+                    "labels": {
+                      "grafana.app/export-label": "prometheus-1"
+                    }
+                  },
+                  "refId": "A",
+                  "hidden": false
+                }
+              }
+            ],
+            "transformations": [],
+            "queryOptions": {}
+          }
+        },
+        "vizConfig": {
+          "kind": "VizConfig",
+          "group": "timeseries",
+          "version": "13.0.2",
+          "spec": {
+            "options": {
+              "alertThreshold": true,
+              "annotations": {
+                "clustering": -1,
+                "multiLane": false
+              },
+              "legend": {
+                "calcs": [
+                  "lastNotNull"
+                ],
+                "displayMode": "table",
+                "placement": "bottom",
+                "showLegend": true
+              },
+              "tooltip": {
+                "hideZeros": false,
+                "mode": "multi",
+                "sort": "none"
+              }
+            },
+            "fieldConfig": {
+              "defaults": {
+                "unit": "percentunit",
+                "min": 0,
+                "thresholds": {
+                  "mode": "absolute",
+                  "steps": [
+                    {
+                      "value": 0,
+                      "color": "green"
+                    },
+                    {
+                      "value": 80,
+                      "color": "red"
+                    }
+                  ]
+                },
+                "color": {
+                  "mode": "palette-classic"
+                },
+                "custom": {
+                  "axisBorderShow": false,
+                  "axisCenteredZero": false,
+                  "axisColorMode": "text",
+                  "axisLabel": "",
+                  "axisPlacement": "auto",
+                  "barAlignment": 0,
+                  "barWidthFactor": 0.6,
+                  "drawStyle": "line",
+                  "fillOpacity": 10,
+                  "gradientMode": "none",
+                  "hideFrom": {
+                    "legend": false,
+                    "tooltip": false,
+                    "viz": false
+                  },
+                  "insertNulls": false,
+                  "lineInterpolation": "linear",
+                  "lineWidth": 2,
+                  "pointSize": 5,
+                  "scaleDistribution": {
+                    "type": "linear"
+                  },
+                  "showPoints": "never",
+                  "showValues": false,
+                  "spanNulls": false,
+                  "stacking": {
+                    "group": "A",
+                    "mode": "none"
+                  },
+                  "thresholdsStyle": {
+                    "mode": "off"
+                  }
+                }
+              },
+              "overrides": [
+                {
+                  "matcher": {
+                    "id": "byName",
+                    "options": "MAX"
+                  },
+                  "properties": [
+                    {
+                      "id": "color",
+                      "value": {
+                        "fixedColor": "#1F60C4",
+                        "mode": "fixed"
+                      }
+                    },
+                    {
+                      "id": "custom.fillOpacity",
+                      "value": 0
+                    },
+                    {
+                      "id": "custom.stacking",
+                      "value": {
+                        "group": "A",
+                        "mode": "none"
+                      }
+                    },
+                    {
+                      "id": "custom.lineStyle",
+                      "value": {
+                        "dash": [
+                          10,
+                          10
+                        ],
+                        "fill": "dash"
+                      }
+                    }
+                  ]
+                },
+                {
+                  "matcher": {
+                    "id": "byName",
+                    "options": "MAX + PENDING"
+                  },
+                  "properties": [
+                    {
+                      "id": "color",
+                      "value": {
+                        "fixedColor": "#777777",
+                        "mode": "fixed"
+                      }
+                    },
+                    {
+                      "id": "custom.fillOpacity",
+                      "value": 0
+                    },
+                    {
+                      "id": "custom.stacking",
+                      "value": {
+                        "group": "A",
+                        "mode": "none"
+                      }
+                    },
+                    {
+                      "id": "custom.lineStyle",
+                      "value": {
+                        "dash": [
+                          10,
+                          10
+                        ],
+                        "fill": "dash"
+                      }
+                    }
+                  ]
+                },
+                {
+                  "matcher": {
+                    "id": "byValue",
+                    "options": {
+                      "op": "gte",
+                      "reducer": "allIsZero",
+                      "value": 0
+                    }
+                  },
+                  "properties": [
+                    {
+                      "id": "custom.hideFrom",
+                      "value": {
+                        "legend": true,
+                        "tooltip": true,
+                        "viz": false
+                      }
+                    }
+                  ]
+                }
+              ]
+            }
+          }
+        }
+      }
+    },
+    "engine.vllm.metric.vllm_time_to_first_token_latency": {
+      "kind": "Panel",
+      "spec": {
+        "id": 5,
+        "title": "vLLM: Time To First Token Latency",
+        "description": "P50, P90, P95, and P99 TTFT latency.",
+        "links": [],
+        "data": {
+          "kind": "QueryGroup",
+          "spec": {
+            "queries": [
+              {
+                "kind": "PanelQuery",
+                "spec": {
+                  "query": {
+                    "kind": "DataQuery",
+                    "group": "prometheus",
+                    "version": "v0",
+                    "spec": {
+                      "editorMode": "code",
+                      "exemplar": true,
+                      "expr": "(sum by(model_name, engine) (rate(vllm:time_to_first_token_seconds_sum{model_name=~\"$vllm_model_name\", engine=~\"$workerid\", replica=~\"$replica\"}[$interval]))\n/\nsum by(model_name, engine) (rate(vllm:time_to_first_token_seconds_count{model_name=~\"$vllm_model_name\", engine=~\"$workerid\", replica=~\"$replica\"}[$interval])))",
+                      "interval": "",
+                      "legendFormat": "Average - {{model_name}} - {{engine}} - replica $replica ",
+                      "queryType": "randomWalk",
+                      "range": true
+                    },
+                    "labels": {
+                      "grafana.app/export-label": "prometheus-1"
+                    }
+                  },
+                  "refId": "A",
+                  "hidden": false
+                }
+              },
+              {
+                "kind": "PanelQuery",
+                "spec": {
+                  "query": {
+                    "kind": "DataQuery",
+                    "group": "prometheus",
+                    "version": "v0",
+                    "spec": {
+                      "editorMode": "code",
+                      "exemplar": true,
+                      "expr": "histogram_quantile(0.5, sum by(le, model_name, engine)(rate(vllm:time_to_first_token_seconds_bucket{model_name=~\"$vllm_model_name\", engine=~\"$workerid\", replica=~\"$replica\"}[$interval])))",
+                      "interval": "",
+                      "legendFormat": "P50 - {{model_name}} - {{engine}} - replica $replica",
+                      "queryType": "randomWalk",
+                      "range": true
+                    },
+                    "labels": {
+                      "grafana.app/export-label": "prometheus-1"
+                    }
+                  },
+                  "refId": "B",
+                  "hidden": false
+                }
+              },
+              {
+                "kind": "PanelQuery",
+                "spec": {
+                  "query": {
+                    "kind": "DataQuery",
+                    "group": "prometheus",
+                    "version": "v0",
+                    "spec": {
+                      "editorMode": "code",
+                      "exemplar": true,
+                      "expr": "histogram_quantile(0.9, sum by(le, model_name, engine)(rate(vllm:time_to_first_token_seconds_bucket{model_name=~\"$vllm_model_name\", engine=~\"$workerid\", replica=~\"$replica\"}[$interval])))",
+                      "interval": "",
+                      "legendFormat": "P90 - {{model_name}} - {{engine}} - replica $replica",
+                      "queryType": "randomWalk",
+                      "range": true
+                    },
+                    "labels": {
+                      "grafana.app/export-label": "prometheus-1"
+                    }
+                  },
+                  "refId": "C",
+                  "hidden": false
+                }
+              },
+              {
+                "kind": "PanelQuery",
+                "spec": {
+                  "query": {
+                    "kind": "DataQuery",
+                    "group": "prometheus",
+                    "version": "v0",
+                    "spec": {
+                      "editorMode": "code",
+                      "exemplar": true,
+                      "expr": "histogram_quantile(0.95, sum by(le, model_name, engine) (rate(vllm:time_to_first_token_seconds_bucket{model_name=~\"$vllm_model_name\", engine=~\"$workerid\", replica=~\"$replica\"}[$interval])))",
+                      "interval": "",
+                      "legendFormat": "P95 - {{model_name}} - {{engine}} - replica $replica",
+                      "queryType": "randomWalk",
+                      "range": true
+                    },
+                    "labels": {
+                      "grafana.app/export-label": "prometheus-1"
+                    }
+                  },
+                  "refId": "D",
+                  "hidden": false
+                }
+              },
+              {
+                "kind": "PanelQuery",
+                "spec": {
+                  "query": {
+                    "kind": "DataQuery",
+                    "group": "prometheus",
+                    "version": "v0",
+                    "spec": {
+                      "editorMode": "code",
+                      "exemplar": true,
+                      "expr": "histogram_quantile(0.99, sum by(le, model_name, engine)(rate(vllm:time_to_first_token_seconds_bucket{model_name=~\"$vllm_model_name\", engine=~\"$workerid\", replica=~\"$replica\"}[$interval])))",
+                      "interval": "",
+                      "legendFormat": "P99 - {{model_name}} - {{engine}} - replica $replica",
+                      "queryType": "randomWalk",
+                      "range": true
+                    },
+                    "labels": {
+                      "grafana.app/export-label": "prometheus-1"
+                    }
+                  },
+                  "refId": "E",
+                  "hidden": false
+                }
+              }
+            ],
+            "transformations": [],
+            "queryOptions": {}
+          }
+        },
+        "vizConfig": {
+          "kind": "VizConfig",
+          "group": "timeseries",
+          "version": "13.0.2",
+          "spec": {
+            "options": {
+              "alertThreshold": true,
+              "annotations": {
+                "clustering": -1,
+                "multiLane": false
+              },
+              "legend": {
+                "calcs": [
+                  "lastNotNull"
+                ],
+                "displayMode": "table",
+                "placement": "bottom",
+                "showLegend": true
+              },
+              "tooltip": {
+                "hideZeros": false,
+                "mode": "multi",
+                "sort": "none"
+              }
+            },
+            "fieldConfig": {
+              "defaults": {
+                "unit": "s",
+                "min": 0,
+                "thresholds": {
+                  "mode": "absolute",
+                  "steps": [
+                    {
+                      "value": 0,
+                      "color": "green"
+                    },
+                    {
+                      "value": 80,
+                      "color": "red"
+                    }
+                  ]
+                },
+                "color": {
+                  "mode": "palette-classic"
+                },
+                "custom": {
+                  "axisBorderShow": false,
+                  "axisCenteredZero": false,
+                  "axisColorMode": "text",
+                  "axisLabel": "",
+                  "axisPlacement": "auto",
+                  "barAlignment": 0,
+                  "barWidthFactor": 0.6,
+                  "drawStyle": "line",
+                  "fillOpacity": 10,
+                  "gradientMode": "none",
+                  "hideFrom": {
+                    "legend": false,
+                    "tooltip": false,
+                    "viz": false
+                  },
+                  "insertNulls": false,
+                  "lineInterpolation": "linear",
+                  "lineWidth": 2,
+                  "pointSize": 5,
+                  "scaleDistribution": {
+                    "type": "linear"
+                  },
+                  "showPoints": "never",
+                  "showValues": false,
+                  "spanNulls": false,
+                  "stacking": {
+                    "group": "A",
+                    "mode": "none"
+                  },
+                  "thresholdsStyle": {
+                    "mode": "off"
+                  }
+                }
+              },
+              "overrides": [
+                {
+                  "matcher": {
+                    "id": "byName",
+                    "options": "MAX"
+                  },
+                  "properties": [
+                    {
+                      "id": "color",
+                      "value": {
+                        "fixedColor": "#1F60C4",
+                        "mode": "fixed"
+                      }
+                    },
+                    {
+                      "id": "custom.fillOpacity",
+                      "value": 0
+                    },
+                    {
+                      "id": "custom.stacking",
+                      "value": {
+                        "group": "A",
+                        "mode": "none"
+                      }
+                    },
+                    {
+                      "id": "custom.lineStyle",
+                      "value": {
+                        "dash": [
+                          10,
+                          10
+                        ],
+                        "fill": "dash"
+                      }
+                    }
+                  ]
+                },
+                {
+                  "matcher": {
+                    "id": "byName",
+                    "options": "MAX + PENDING"
+                  },
+                  "properties": [
+                    {
+                      "id": "color",
+                      "value": {
+                        "fixedColor": "#777777",
+                        "mode": "fixed"
+                      }
+                    },
+                    {
+                      "id": "custom.fillOpacity",
+                      "value": 0
+                    },
+                    {
+                      "id": "custom.stacking",
+                      "value": {
+                        "group": "A",
+                        "mode": "none"
+                      }
+                    },
+                    {
+                      "id": "custom.lineStyle",
+                      "value": {
+                        "dash": [
+                          10,
+                          10
+                        ],
+                        "fill": "dash"
+                      }
+                    }
+                  ]
+                },
+                {
+                  "matcher": {
+                    "id": "byValue",
+                    "options": {
+                      "op": "gte",
+                      "reducer": "allIsZero",
+                      "value": 0
+                    }
+                  },
+                  "properties": [
+                    {
+                      "id": "custom.hideFrom",
+                      "value": {
+                        "legend": true,
+                        "tooltip": true,
+                        "viz": false
+                      }
+                    }
+                  ]
+                }
+              ]
+            }
+          }
+        }
+      }
+    },
+    "engine.vllm.metric.vllm_e2e_request_latency": {
+      "kind": "Panel",
+      "spec": {
+        "id": 6,
+        "title": "vLLM: E2E Request Latency",
+        "description": "Latency from request start to first token returned (in seconds).",
+        "links": [],
+        "data": {
+          "kind": "QueryGroup",
+          "spec": {
+            "queries": [
+              {
+                "kind": "PanelQuery",
+                "spec": {
+                  "query": {
+                    "kind": "DataQuery",
+                    "group": "prometheus",
+                    "version": "v0",
+                    "spec": {
+                      "editorMode": "code",
+                      "exemplar": true,
+                      "expr": "sum by(model_name, engine) (rate(vllm:e2e_request_latency_seconds_sum{model_name=~\"$vllm_model_name\", engine=~\"$workerid\", replica=~\"$replica\"}[$interval]))\n/\nsum by(model_name, engine) (rate(vllm:e2e_request_latency_seconds_count{model_name=~\"$vllm_model_name\", engine=~\"$workerid\", replica=~\"$replica\"}[$interval]))",
+                      "interval": "",
+                      "legendFormat": "Average - {{model_name}} - {{engine}} - replica $replica",
+                      "queryType": "randomWalk",
+                      "range": true
+                    },
+                    "labels": {
+                      "grafana.app/export-label": "prometheus-1"
+                    }
+                  },
+                  "refId": "A",
+                  "hidden": false
+                }
+              },
+              {
+                "kind": "PanelQuery",
+                "spec": {
+                  "query": {
+                    "kind": "DataQuery",
+                    "group": "prometheus",
+                    "version": "v0",
+                    "spec": {
+                      "editorMode": "code",
+                      "exemplar": true,
+                      "expr": "histogram_quantile(0.5, sum by(le, model_name, engine) (rate(vllm:e2e_request_latency_seconds_bucket{model_name=~\"$vllm_model_name\", engine=~\"$workerid\", replica=~\"$replica\"}[$interval])))",
+                      "interval": "",
+                      "legendFormat": "P50 - {{model_name}} - {{engine}} - replica $replica",
+                      "queryType": "randomWalk",
+                      "range": true
+                    },
+                    "labels": {
+                      "grafana.app/export-label": "prometheus-1"
+                    }
+                  },
+                  "refId": "B",
+                  "hidden": false
+                }
+              },
+              {
+                "kind": "PanelQuery",
+                "spec": {
+                  "query": {
+                    "kind": "DataQuery",
+                    "group": "prometheus",
+                    "version": "v0",
+                    "spec": {
+                      "editorMode": "code",
+                      "exemplar": true,
+                      "expr": "histogram_quantile(0.9, sum by(le, model_name, engine) (rate(vllm:e2e_request_latency_seconds_bucket{model_name=~\"$vllm_model_name\", engine=~\"$workerid\", replica=~\"$replica\"}[$interval])))",
+                      "interval": "",
+                      "legendFormat": "P90 - {{model_name}} - {{engine}} - replica $replica",
+                      "queryType": "randomWalk",
+                      "range": true
+                    },
+                    "labels": {
+                      "grafana.app/export-label": "prometheus-1"
+                    }
+                  },
+                  "refId": "C",
+                  "hidden": false
+                }
+              },
+              {
+                "kind": "PanelQuery",
+                "spec": {
+                  "query": {
+                    "kind": "DataQuery",
+                    "group": "prometheus",
+                    "version": "v0",
+                    "spec": {
+                      "editorMode": "code",
+                      "exemplar": true,
+                      "expr": "histogram_quantile(0.95, sum by(le, model_name, engine) (rate(vllm:e2e_request_latency_seconds_bucket{model_name=~\"$vllm_model_name\", engine=~\"$workerid\", replica=~\"$replica\"}[$interval])))",
+                      "interval": "",
+                      "legendFormat": "P95 - {{model_name}} - {{engine}} - replica $replica",
+                      "queryType": "randomWalk",
+                      "range": true
+                    },
+                    "labels": {
+                      "grafana.app/export-label": "prometheus-1"
+                    }
+                  },
+                  "refId": "D",
+                  "hidden": false
+                }
+              },
+              {
+                "kind": "PanelQuery",
+                "spec": {
+                  "query": {
+                    "kind": "DataQuery",
+                    "group": "prometheus",
+                    "version": "v0",
+                    "spec": {
+                      "editorMode": "code",
+                      "exemplar": true,
+                      "expr": "histogram_quantile(0.99, sum by(le, model_name, engine) (rate(vllm:e2e_request_latency_seconds_bucket{model_name=~\"$vllm_model_name\", engine=~\"$workerid\", replica=~\"$replica\"}[$interval])))",
+                      "interval": "",
+                      "legendFormat": "P99 - {{model_name}} - {{engine}} - replica $replica",
+                      "queryType": "randomWalk",
+                      "range": true
+                    },
+                    "labels": {
+                      "grafana.app/export-label": "prometheus-1"
+                    }
+                  },
+                  "refId": "E",
+                  "hidden": false
+                }
+              }
+            ],
+            "transformations": [],
+            "queryOptions": {}
+          }
+        },
+        "vizConfig": {
+          "kind": "VizConfig",
+          "group": "timeseries",
+          "version": "13.0.2",
+          "spec": {
+            "options": {
+              "alertThreshold": true,
+              "annotations": {
+                "clustering": -1,
+                "multiLane": false
+              },
+              "legend": {
+                "calcs": [
+                  "lastNotNull"
+                ],
+                "displayMode": "table",
+                "placement": "bottom",
+                "showLegend": true
+              },
+              "tooltip": {
+                "hideZeros": false,
+                "mode": "multi",
+                "sort": "none"
+              }
+            },
+            "fieldConfig": {
+              "defaults": {
+                "unit": "s",
+                "min": 0,
+                "thresholds": {
+                  "mode": "absolute",
+                  "steps": [
+                    {
+                      "value": 0,
+                      "color": "green"
+                    },
+                    {
+                      "value": 80,
+                      "color": "red"
+                    }
+                  ]
+                },
+                "color": {
+                  "mode": "palette-classic"
+                },
+                "custom": {
+                  "axisBorderShow": false,
+                  "axisCenteredZero": false,
+                  "axisColorMode": "text",
+                  "axisLabel": "",
+                  "axisPlacement": "auto",
+                  "barAlignment": 0,
+                  "barWidthFactor": 0.6,
+                  "drawStyle": "line",
+                  "fillOpacity": 10,
+                  "gradientMode": "none",
+                  "hideFrom": {
+                    "legend": false,
+                    "tooltip": false,
+                    "viz": false
+                  },
+                  "insertNulls": false,
+                  "lineInterpolation": "linear",
+                  "lineWidth": 2,
+                  "pointSize": 5,
+                  "scaleDistribution": {
+                    "type": "linear"
+                  },
+                  "showPoints": "never",
+                  "showValues": false,
+                  "spanNulls": false,
+                  "stacking": {
+                    "group": "A",
+                    "mode": "none"
+                  },
+                  "thresholdsStyle": {
+                    "mode": "off"
+                  }
+                }
+              },
+              "overrides": [
+                {
+                  "matcher": {
+                    "id": "byName",
+                    "options": "MAX"
+                  },
+                  "properties": [
+                    {
+                      "id": "color",
+                      "value": {
+                        "fixedColor": "#1F60C4",
+                        "mode": "fixed"
+                      }
+                    },
+                    {
+                      "id": "custom.fillOpacity",
+                      "value": 0
+                    },
+                    {
+                      "id": "custom.stacking",
+                      "value": {
+                        "group": "A",
+                        "mode": "none"
+                      }
+                    },
+                    {
+                      "id": "custom.lineStyle",
+                      "value": {
+                        "dash": [
+                          10,
+                          10
+                        ],
+                        "fill": "dash"
+                      }
+                    }
+                  ]
+                },
+                {
+                  "matcher": {
+                    "id": "byName",
+                    "options": "MAX + PENDING"
+                  },
+                  "properties": [
+                    {
+                      "id": "color",
+                      "value": {
+                        "fixedColor": "#777777",
+                        "mode": "fixed"
+                      }
+                    },
+                    {
+                      "id": "custom.fillOpacity",
+                      "value": 0
+                    },
+                    {
+                      "id": "custom.stacking",
+                      "value": {
+                        "group": "A",
+                        "mode": "none"
+                      }
+                    },
+                    {
+                      "id": "custom.lineStyle",
+                      "value": {
+                        "dash": [
+                          10,
+                          10
+                        ],
+                        "fill": "dash"
+                      }
+                    }
+                  ]
+                },
+                {
+                  "matcher": {
+                    "id": "byValue",
+                    "options": {
+                      "op": "gte",
+                      "reducer": "allIsZero",
+                      "value": 0
+                    }
+                  },
+                  "properties": [
+                    {
+                      "id": "custom.hideFrom",
+                      "value": {
+                        "legend": true,
+                        "tooltip": true,
+                        "viz": false
+                      }
+                    }
+                  ]
+                }
+              ]
+            }
+          }
+        }
+      }
+    },
+    "engine.vllm.metric.vllm_scheduler_state": {
+      "kind": "Panel",
+      "spec": {
+        "id": 7,
+        "title": "vLLM: Scheduler State",
+        "description": "Number of requests in RUNNING, WAITING, and SWAPPED state",
+        "links": [],
+        "data": {
+          "kind": "QueryGroup",
+          "spec": {
+            "queries": [
+              {
+                "kind": "PanelQuery",
+                "spec": {
+                  "query": {
+                    "kind": "DataQuery",
+                    "group": "prometheus",
+                    "version": "v0",
+                    "spec": {
+                      "editorMode": "code",
+                      "exemplar": true,
+                      "expr": "vllm:num_requests_running{model_name=~\"$vllm_model_name\", engine=~\"$workerid\", replica=~\"$replica\"}",
+                      "interval": "",
+                      "legendFormat": "Num Running - {{model_name}} - {{engine}} - replica {{replica}}",
+                      "queryType": "randomWalk",
+                      "range": true
+                    },
+                    "labels": {
+                      "grafana.app/export-label": "prometheus-1"
+                    }
+                  },
+                  "refId": "A",
+                  "hidden": false
+                }
+              },
+              {
+                "kind": "PanelQuery",
+                "spec": {
+                  "query": {
+                    "kind": "DataQuery",
+                    "group": "prometheus",
+                    "version": "v0",
+                    "spec": {
+                      "editorMode": "code",
+                      "exemplar": true,
+                      "expr": "vllm:num_requests_swapped{model_name=~\"$vllm_model_name\", engine=~\"$workerid\", replica=~\"$replica\"}",
+                      "interval": "",
+                      "legendFormat": "Num Swapped - {{model_name}} - {{engine}} -  replica {{replica}}",
+                      "queryType": "randomWalk",
+                      "range": true
+                    },
+                    "labels": {
+                      "grafana.app/export-label": "prometheus-1"
+                    }
+                  },
+                  "refId": "B",
+                  "hidden": false
+                }
+              },
+              {
+                "kind": "PanelQuery",
+                "spec": {
+                  "query": {
+                    "kind": "DataQuery",
+                    "group": "prometheus",
+                    "version": "v0",
+                    "spec": {
+                      "editorMode": "code",
+                      "exemplar": true,
+                      "expr": "vllm:num_requests_waiting{model_name=~\"$vllm_model_name\", engine=~\"$workerid\", replica=~\"$replica\"}",
+                      "interval": "",
+                      "legendFormat": "Num Waiting - {{model_name}} - {{engine}} - replica {{replica}}",
+                      "queryType": "randomWalk",
+                      "range": true
+                    },
+                    "labels": {
+                      "grafana.app/export-label": "prometheus-1"
+                    }
+                  },
+                  "refId": "C",
+                  "hidden": false
+                }
+              }
+            ],
+            "transformations": [],
+            "queryOptions": {}
+          }
+        },
+        "vizConfig": {
+          "kind": "VizConfig",
+          "group": "timeseries",
+          "version": "13.0.2",
+          "spec": {
+            "options": {
+              "alertThreshold": true,
+              "annotations": {
+                "clustering": -1,
+                "multiLane": false
+              },
+              "legend": {
+                "calcs": [
+                  "lastNotNull"
+                ],
+                "displayMode": "table",
+                "placement": "bottom",
+                "showLegend": true
+              },
+              "tooltip": {
+                "hideZeros": false,
+                "mode": "multi",
+                "sort": "none"
+              }
+            },
+            "fieldConfig": {
+              "defaults": {
+                "unit": "Requests",
+                "min": 0,
+                "thresholds": {
+                  "mode": "absolute",
+                  "steps": [
+                    {
+                      "value": 0,
+                      "color": "green"
+                    },
+                    {
+                      "value": 80,
+                      "color": "red"
+                    }
+                  ]
+                },
+                "color": {
+                  "mode": "palette-classic"
+                },
+                "custom": {
+                  "axisBorderShow": false,
+                  "axisCenteredZero": false,
+                  "axisColorMode": "text",
+                  "axisLabel": "",
+                  "axisPlacement": "auto",
+                  "barAlignment": 0,
+                  "barWidthFactor": 0.6,
+                  "drawStyle": "line",
+                  "fillOpacity": 10,
+                  "gradientMode": "none",
+                  "hideFrom": {
+                    "legend": false,
+                    "tooltip": false,
+                    "viz": false
+                  },
+                  "insertNulls": false,
+                  "lineInterpolation": "linear",
+                  "lineWidth": 2,
+                  "pointSize": 5,
+                  "scaleDistribution": {
+                    "type": "linear"
+                  },
+                  "showPoints": "never",
+                  "showValues": false,
+                  "spanNulls": false,
+                  "stacking": {
+                    "group": "A",
+                    "mode": "none"
+                  },
+                  "thresholdsStyle": {
+                    "mode": "off"
+                  }
+                }
+              },
+              "overrides": [
+                {
+                  "matcher": {
+                    "id": "byName",
+                    "options": "MAX"
+                  },
+                  "properties": [
+                    {
+                      "id": "color",
+                      "value": {
+                        "fixedColor": "#1F60C4",
+                        "mode": "fixed"
+                      }
+                    },
+                    {
+                      "id": "custom.fillOpacity",
+                      "value": 0
+                    },
+                    {
+                      "id": "custom.stacking",
+                      "value": {
+                        "group": "A",
+                        "mode": "none"
+                      }
+                    },
+                    {
+                      "id": "custom.lineStyle",
+                      "value": {
+                        "dash": [
+                          10,
+                          10
+                        ],
+                        "fill": "dash"
+                      }
+                    }
+                  ]
+                },
+                {
+                  "matcher": {
+                    "id": "byName",
+                    "options": "MAX + PENDING"
+                  },
+                  "properties": [
+                    {
+                      "id": "color",
+                      "value": {
+                        "fixedColor": "#777777",
+                        "mode": "fixed"
+                      }
+                    },
+                    {
+                      "id": "custom.fillOpacity",
+                      "value": 0
+                    },
+                    {
+                      "id": "custom.stacking",
+                      "value": {
+                        "group": "A",
+                        "mode": "none"
+                      }
+                    },
+                    {
+                      "id": "custom.lineStyle",
+                      "value": {
+                        "dash": [
+                          10,
+                          10
+                        ],
+                        "fill": "dash"
+                      }
+                    }
+                  ]
+                },
+                {
+                  "matcher": {
+                    "id": "byValue",
+                    "options": {
+                      "op": "gte",
+                      "reducer": "allIsZero",
+                      "value": 0
+                    }
+                  },
+                  "properties": [
+                    {
+                      "id": "custom.hideFrom",
+                      "value": {
+                        "legend": true,
+                        "tooltip": true,
+                        "viz": false
+                      }
+                    }
+                  ]
+                }
+              ]
+            }
+          }
+        }
+      }
+    },
+    "engine.vllm.metric.vllm_request_prompt_length": {
+      "kind": "Panel",
+      "spec": {
+        "id": 8,
+        "title": "vLLM: Request Prompt Length",
+        "description": "Heatmap of request prompt length",
+        "links": [],
+        "data": {
+          "kind": "QueryGroup",
+          "spec": {
+            "queries": [
+              {
+                "kind": "PanelQuery",
+                "spec": {
+                  "query": {
+                    "kind": "DataQuery",
+                    "group": "prometheus",
+                    "version": "v0",
+                    "spec": {
+                      "editorMode": "code",
+                      "expr": "sum by(le, model_name, engine, replica) (increase(vllm:request_prompt_tokens_bucket{model_name=~\"$vllm_model_name\", engine=~\"$workerid\", replica=~\"$replica\"}[$interval]))",
+                      "format": "heatmap",
+                      "fullMetaSearch": false,
+                      "includeNullMetadata": true,
+                      "instant": false,
+                      "legendFormat": "{{le}} - replica {{replica}}",
+                      "range": true,
+                      "useBackend": false
+                    },
+                    "labels": {
+                      "grafana.app/export-label": "prometheus-1"
+                    }
+                  },
+                  "refId": "A",
+                  "hidden": false
+                }
+              }
+            ],
+            "transformations": [],
+            "queryOptions": {}
+          }
+        },
+        "vizConfig": {
+          "kind": "VizConfig",
+          "group": "heatmap",
+          "version": "13.0.2",
+          "spec": {
+            "options": {
+              "annotations": {
+                "clustering": -1,
+                "multiLane": false
+              },
+              "calculate": false,
+              "cellGap": 1,
+              "cellValues": {
+                "unit": "none"
+              },
+              "color": {
+                "exponent": 0.5,
+                "fill": "dark-orange",
+                "min": 0,
+                "mode": "scheme",
+                "reverse": false,
+                "scale": "exponential",
+                "scheme": "Spectral",
+                "steps": 64
+              },
+              "exemplars": {
+                "color": "rgba(255,0,255,0.7)"
+              },
+              "filterValues": {
+                "le": 1e-09
+              },
+              "legend": {
+                "show": true,
+                "showLegend": true
+              },
+              "rowsFrame": {
+                "layout": "auto",
+                "value": "Request count"
+              },
+              "tooltip": {
+                "mode": "single",
+                "showColorScale": false,
+                "yHistogram": true
+              },
+              "yAxis": {
+                "axisPlacement": "left",
+                "reverse": false,
+                "unit": "none"
+              }
+            },
+            "fieldConfig": {
+              "defaults": {
+                "custom": {
+                  "hideFrom": {
+                    "legend": false,
+                    "tooltip": false,
+                    "viz": false
+                  },
+                  "scaleDistribution": {
+                    "type": "linear"
+                  }
+                }
+              },
+              "overrides": []
+            }
+          }
+        }
+      }
+    },
+    "engine.vllm.metric.vllm_request_generation_length": {
+      "kind": "Panel",
+      "spec": {
+        "id": 9,
+        "title": "vLLM: Request Generation Length",
+        "description": "Heatmap of request generation length",
+        "links": [],
+        "data": {
+          "kind": "QueryGroup",
+          "spec": {
+            "queries": [
+              {
+                "kind": "PanelQuery",
+                "spec": {
+                  "query": {
+                    "kind": "DataQuery",
+                    "group": "prometheus",
+                    "version": "v0",
+                    "spec": {
+                      "editorMode": "code",
+                      "expr": "sum by(le, model_name, engine, replica) (increase(vllm:request_generation_tokens_bucket{model_name=~\"$vllm_model_name\", engine=~\"$workerid\", replica=~\"$replica\"}[$interval]))",
+                      "format": "heatmap",
+                      "fullMetaSearch": false,
+                      "includeNullMetadata": true,
+                      "instant": false,
+                      "legendFormat": "{{le}} - replica {{replica}}",
+                      "range": true,
+                      "useBackend": false
+                    },
+                    "labels": {
+                      "grafana.app/export-label": "prometheus-1"
+                    }
+                  },
+                  "refId": "A",
+                  "hidden": false
+                }
+              }
+            ],
+            "transformations": [],
+            "queryOptions": {}
+          }
+        },
+        "vizConfig": {
+          "kind": "VizConfig",
+          "group": "heatmap",
+          "version": "13.0.2",
+          "spec": {
+            "options": {
+              "annotations": {
+                "clustering": -1,
+                "multiLane": false
+              },
+              "calculate": false,
+              "cellGap": 1,
+              "cellValues": {
+                "unit": "none"
+              },
+              "color": {
+                "exponent": 0.5,
+                "fill": "dark-orange",
+                "min": 0,
+                "mode": "scheme",
+                "reverse": false,
+                "scale": "exponential",
+                "scheme": "Spectral",
+                "steps": 64
+              },
+              "exemplars": {
+                "color": "rgba(255,0,255,0.7)"
+              },
+              "filterValues": {
+                "le": 1e-09
+              },
+              "legend": {
+                "show": true,
+                "showLegend": true
+              },
+              "rowsFrame": {
+                "layout": "auto",
+                "value": "Request count"
+              },
+              "tooltip": {
+                "mode": "single",
+                "showColorScale": false,
+                "yHistogram": true
+              },
+              "yAxis": {
+                "axisPlacement": "left",
+                "reverse": false,
+                "unit": "none"
+              }
+            },
+            "fieldConfig": {
+              "defaults": {
+                "custom": {
+                  "hideFrom": {
+                    "legend": false,
+                    "tooltip": false,
+                    "viz": false
+                  },
+                  "scaleDistribution": {
+                    "type": "linear"
+                  }
+                }
+              },
+              "overrides": []
+            }
+          }
+        }
+      }
+    },
+    "engine.vllm.metric.vllm_finish_reason": {
+      "kind": "Panel",
+      "spec": {
+        "id": 10,
+        "title": "vLLM: Finish Reason",
+        "description": "Number of finished requests by their finish reason: either an EOS token was generated or the max sequence length was reached.",
+        "links": [],
+        "data": {
+          "kind": "QueryGroup",
+          "spec": {
+            "queries": [
+              {
+                "kind": "PanelQuery",
+                "spec": {
+                  "query": {
+                    "kind": "DataQuery",
+                    "group": "prometheus",
+                    "version": "v0",
+                    "spec": {
+                      "editorMode": "code",
+                      "exemplar": true,
+                      "expr": "sum by(finished_reason, model_name, engine) (increase(vllm:request_success_total{model_name=~\"$vllm_model_name\", engine=~\"$workerid\", replica=~\"$replica\"}[$interval]))",
+                      "interval": "",
+                      "legendFormat": "{{finished_reason}} - {{model_name}} - {{engine}} - replica $replica",
+                      "queryType": "randomWalk",
+                      "range": true
+                    },
+                    "labels": {
+                      "grafana.app/export-label": "prometheus-1"
+                    }
+                  },
+                  "refId": "A",
+                  "hidden": false
+                }
+              }
+            ],
+            "transformations": [],
+            "queryOptions": {}
+          }
+        },
+        "vizConfig": {
+          "kind": "VizConfig",
+          "group": "timeseries",
+          "version": "13.0.2",
+          "spec": {
+            "options": {
+              "alertThreshold": true,
+              "annotations": {
+                "clustering": -1,
+                "multiLane": false
+              },
+              "legend": {
+                "calcs": [],
+                "displayMode": "list",
+                "placement": "bottom",
+                "showLegend": true
+              },
+              "tooltip": {
+                "hideZeros": false,
+                "mode": "single",
+                "sort": "none"
+              }
+            },
+            "fieldConfig": {
+              "defaults": {
+                "thresholds": {
+                  "mode": "absolute",
+                  "steps": [
+                    {
+                      "value": 0,
+                      "color": "green"
+                    },
+                    {
+                      "value": 80,
+                      "color": "red"
+                    }
+                  ]
+                },
+                "color": {
+                  "mode": "palette-classic"
+                },
+                "custom": {
+                  "axisBorderShow": false,
+                  "axisCenteredZero": false,
+                  "axisColorMode": "text",
+                  "axisLabel": "",
+                  "axisPlacement": "auto",
+                  "barAlignment": 0,
+                  "barWidthFactor": 0.6,
+                  "drawStyle": "line",
+                  "fillOpacity": 0,
+                  "gradientMode": "none",
+                  "hideFrom": {
+                    "legend": false,
+                    "tooltip": false,
+                    "viz": false
+                  },
+                  "insertNulls": false,
+                  "lineInterpolation": "linear",
+                  "lineWidth": 1,
+                  "pointSize": 5,
+                  "scaleDistribution": {
+                    "type": "linear"
+                  },
+                  "showPoints": "auto",
+                  "showValues": false,
+                  "spanNulls": false,
+                  "stacking": {
+                    "group": "A",
+                    "mode": "none"
+                  },
+                  "thresholdsStyle": {
+                    "mode": "off"
+                  }
+                }
+              },
+              "overrides": []
+            }
+          }
+        }
+      }
+    },
+    "engine.vllm.metric.vllm_queue_time": {
+      "kind": "Panel",
+      "spec": {
+        "id": 11,
+        "title": "vLLM: Queue Time",
+        "description": "",
+        "links": [],
+        "data": {
+          "kind": "QueryGroup",
+          "spec": {
+            "queries": [
+              {
+                "kind": "PanelQuery",
+                "spec": {
+                  "query": {
+                    "kind": "DataQuery",
+                    "group": "prometheus",
+                    "version": "v0",
+                    "spec": {
+                      "editorMode": "code",
+                      "exemplar": true,
+                      "expr": "sum by(model_name, engine, replica) (rate(vllm:request_queue_time_seconds_sum{model_name=~\"$vllm_model_name\", engine=~\"$workerid\", replica=~\"$replica\"}[$interval]))",
+                      "interval": "",
+                      "legendFormat": "{{model_name}} - {{engine}} - replica {{replica}}",
+                      "queryType": "randomWalk",
+                      "range": true
+                    },
+                    "labels": {
+                      "grafana.app/export-label": "prometheus-1"
+                    }
+                  },
+                  "refId": "A",
+                  "hidden": false
+                }
+              }
+            ],
+            "transformations": [],
+            "queryOptions": {}
+          }
+        },
+        "vizConfig": {
+          "kind": "VizConfig",
+          "group": "timeseries",
+          "version": "13.0.2",
+          "spec": {
+            "options": {
+              "alertThreshold": true,
+              "annotations": {
+                "clustering": -1,
+                "multiLane": false
+              },
+              "legend": {
+                "calcs": [],
+                "displayMode": "list",
+                "placement": "bottom",
+                "showLegend": true
+              },
+              "tooltip": {
+                "hideZeros": false,
+                "mode": "single",
+                "sort": "none"
+              }
+            },
+            "fieldConfig": {
+              "defaults": {
+                "thresholds": {
+                  "mode": "absolute",
+                  "steps": [
+                    {
+                      "value": 0,
+                      "color": "green"
+                    },
+                    {
+                      "value": 80,
+                      "color": "red"
+                    }
+                  ]
+                },
+                "color": {
+                  "mode": "palette-classic"
+                },
+                "custom": {
+                  "axisBorderShow": false,
+                  "axisCenteredZero": false,
+                  "axisColorMode": "text",
+                  "axisLabel": "",
+                  "axisPlacement": "auto",
+                  "barAlignment": 0,
+                  "barWidthFactor": 0.6,
+                  "drawStyle": "line",
+                  "fillOpacity": 0,
+                  "gradientMode": "none",
+                  "hideFrom": {
+                    "legend": false,
+                    "tooltip": false,
+                    "viz": false
+                  },
+                  "insertNulls": false,
+                  "lineInterpolation": "linear",
+                  "lineWidth": 1,
+                  "pointSize": 5,
+                  "scaleDistribution": {
+                    "type": "linear"
+                  },
+                  "showPoints": "auto",
+                  "showValues": false,
+                  "spanNulls": false,
+                  "stacking": {
+                    "group": "A",
+                    "mode": "none"
+                  },
+                  "thresholdsStyle": {
+                    "mode": "off"
+                  }
+                }
+              },
+              "overrides": []
+            }
+          }
+        }
+      }
+    },
+    "engine.vllm.metric.vllm_requests_prefill_and_decode_time": {
+      "kind": "Panel",
+      "spec": {
+        "id": 12,
+        "title": "vLLM: Requests Prefill and Decode Time",
+        "description": "",
+        "links": [],
+        "data": {
+          "kind": "QueryGroup",
+          "spec": {
+            "queries": [
+              {
+                "kind": "PanelQuery",
+                "spec": {
+                  "query": {
+                    "kind": "DataQuery",
+                    "group": "prometheus",
+                    "version": "v0",
+                    "spec": {
+                      "editorMode": "code",
+                      "exemplar": true,
+                      "expr": "sum by(model_name, engine, replica) (rate(vllm:request_decode_time_seconds_sum{model_name=~\"$vllm_model_name\", engine=~\"$workerid\", replica=~\"$replica\"}[$interval]))",
+                      "interval": "",
+                      "legendFormat": "Decode - {{model_name}} - {{engine}} - replica {{replica}}",
+                      "queryType": "randomWalk",
+                      "range": true
+                    },
+                    "labels": {
+                      "grafana.app/export-label": "prometheus-1"
+                    }
+                  },
+                  "refId": "A",
+                  "hidden": false
+                }
+              },
+              {
+                "kind": "PanelQuery",
+                "spec": {
+                  "query": {
+                    "kind": "DataQuery",
+                    "group": "prometheus",
+                    "version": "v0",
+                    "spec": {
+                      "editorMode": "code",
+                      "exemplar": true,
+                      "expr": "sum by(model_name, engine, replica) (rate(vllm:request_prefill_time_seconds_sum{model_name=~\"$vllm_model_name\", engine=~\"$workerid\", replica=~\"$replica\"}[$interval]))",
+                      "interval": "",
+                      "legendFormat": "Prefill - {{model_name}} - {{engine}} - replica {{replica}}",
+                      "queryType": "randomWalk",
+                      "range": true
+                    },
+                    "labels": {
+                      "grafana.app/export-label": "prometheus-1"
+                    }
+                  },
+                  "refId": "B",
+                  "hidden": false
+                }
+              }
+            ],
+            "transformations": [],
+            "queryOptions": {}
+          }
+        },
+        "vizConfig": {
+          "kind": "VizConfig",
+          "group": "timeseries",
+          "version": "13.0.2",
+          "spec": {
+            "options": {
+              "alertThreshold": true,
+              "annotations": {
+                "clustering": -1,
+                "multiLane": false
+              },
+              "legend": {
+                "calcs": [],
+                "displayMode": "list",
+                "placement": "bottom",
+                "showLegend": true
+              },
+              "tooltip": {
+                "hideZeros": false,
+                "mode": "single",
+                "sort": "none"
+              }
+            },
+            "fieldConfig": {
+              "defaults": {
+                "thresholds": {
+                  "mode": "absolute",
+                  "steps": [
+                    {
+                      "value": 0,
+                      "color": "green"
+                    },
+                    {
+                      "value": 80,
+                      "color": "red"
+                    }
+                  ]
+                },
+                "color": {
+                  "mode": "palette-classic"
+                },
+                "custom": {
+                  "axisBorderShow": false,
+                  "axisCenteredZero": false,
+                  "axisColorMode": "text",
+                  "axisLabel": "",
+                  "axisPlacement": "auto",
+                  "barAlignment": 0,
+                  "barWidthFactor": 0.6,
+                  "drawStyle": "line",
+                  "fillOpacity": 0,
+                  "gradientMode": "none",
+                  "hideFrom": {
+                    "legend": false,
+                    "tooltip": false,
+                    "viz": false
+                  },
+                  "insertNulls": false,
+                  "lineInterpolation": "linear",
+                  "lineWidth": 1,
+                  "pointSize": 5,
+                  "scaleDistribution": {
+                    "type": "linear"
+                  },
+                  "showPoints": "auto",
+                  "showValues": false,
+                  "spanNulls": false,
+                  "stacking": {
+                    "group": "A",
+                    "mode": "none"
+                  },
+                  "thresholdsStyle": {
+                    "mode": "off"
+                  }
+                }
+              },
+              "overrides": []
+            }
+          }
+        }
+      }
+    },
+    "engine.vllm.metric.vllm_max_generation_token_in_sequence_group": {
+      "kind": "Panel",
+      "spec": {
+        "id": 13,
+        "title": "vLLM: Max Generation Token in Sequence Group",
+        "description": "",
+        "links": [],
+        "data": {
+          "kind": "QueryGroup",
+          "spec": {
+            "queries": [
+              {
+                "kind": "PanelQuery",
+                "spec": {
+                  "query": {
+                    "kind": "DataQuery",
+                    "group": "prometheus",
+                    "version": "v0",
+                    "spec": {
+                      "editorMode": "code",
+                      "exemplar": true,
+                      "expr": "sum by(model_name, engine, replica) (rate(vllm:request_max_num_generation_tokens_sum{model_name=~\"$vllm_model_name\", engine=~\"$workerid\", replica=~\"$replica\"}[$interval]))",
+                      "interval": "",
+                      "legendFormat": "{{model_name}} - {{engine}} - replica {{replica}}",
+                      "queryType": "randomWalk",
+                      "range": true
+                    },
+                    "labels": {
+                      "grafana.app/export-label": "prometheus-1"
+                    }
+                  },
+                  "refId": "A",
+                  "hidden": false
+                }
+              }
+            ],
+            "transformations": [],
+            "queryOptions": {}
+          }
+        },
+        "vizConfig": {
+          "kind": "VizConfig",
+          "group": "timeseries",
+          "version": "13.0.2",
+          "spec": {
+            "options": {
+              "alertThreshold": true,
+              "annotations": {
+                "clustering": -1,
+                "multiLane": false
+              },
+              "legend": {
+                "calcs": [],
+                "displayMode": "list",
+                "placement": "bottom",
+                "showLegend": true
+              },
+              "tooltip": {
+                "hideZeros": false,
+                "mode": "single",
+                "sort": "none"
+              }
+            },
+            "fieldConfig": {
+              "defaults": {
+                "thresholds": {
+                  "mode": "absolute",
+                  "steps": [
+                    {
+                      "value": 0,
+                      "color": "green"
+                    },
+                    {
+                      "value": 80,
+                      "color": "red"
+                    }
+                  ]
+                },
+                "color": {
+                  "mode": "palette-classic"
+                },
+                "custom": {
+                  "axisBorderShow": false,
+                  "axisCenteredZero": false,
+                  "axisColorMode": "text",
+                  "axisLabel": "",
+                  "axisPlacement": "auto",
+                  "barAlignment": 0,
+                  "barWidthFactor": 0.6,
+                  "drawStyle": "line",
+                  "fillOpacity": 0,
+                  "gradientMode": "none",
+                  "hideFrom": {
+                    "legend": false,
+                    "tooltip": false,
+                    "viz": false
+                  },
+                  "insertNulls": false,
+                  "lineInterpolation": "linear",
+                  "lineWidth": 1,
+                  "pointSize": 5,
+                  "scaleDistribution": {
+                    "type": "linear"
+                  },
+                  "showPoints": "auto",
+                  "showValues": false,
+                  "spanNulls": false,
+                  "stacking": {
+                    "group": "A",
+                    "mode": "none"
+                  },
+                  "thresholdsStyle": {
+                    "mode": "off"
+                  }
+                }
+              },
+              "overrides": []
+            }
+          }
+        }
+      }
+    },
+    "engine.vllm.metric.vllm_prefix_cache_hit_rate": {
+      "kind": "Panel",
+      "spec": {
+        "id": 28,
+        "title": "vLLM: Prefix Cache Hit Rate",
+        "description": "Percentage of prefix cache queries that resulted in a cache hit (GPU).",
+        "links": [],
+        "data": {
+          "kind": "QueryGroup",
+          "spec": {
+            "queries": [
+              {
+                "kind": "PanelQuery",
+                "spec": {
+                  "query": {
+                    "kind": "DataQuery",
+                    "group": "prometheus",
+                    "version": "v0",
+                    "spec": {
+                      "editorMode": "code",
+                      "exemplar": true,
+                      "expr": "increase(vllm:prefix_cache_hits_total{model_name=~\"$vllm_model_name\", engine=~\"$workerid\", replica=~\"$replica\"}[$interval]) / increase(vllm:prefix_cache_queries_total{model_name=~\"$vllm_model_name\", engine=~\"$workerid\", replica=~\"$replica\"}[$interval])",
+                      "interval": "",
+                      "legendFormat": "Prefix Cache Hit Rate - {{model_name}} - {{engine}} - replica {{replica}}",
+                      "queryType": "randomWalk",
+                      "range": true
+                    },
+                    "labels": {
+                      "grafana.app/export-label": "prometheus-1"
+                    }
+                  },
+                  "refId": "A",
+                  "hidden": false
+                }
+              }
+            ],
+            "transformations": [],
+            "queryOptions": {}
+          }
+        },
+        "vizConfig": {
+          "kind": "VizConfig",
+          "group": "timeseries",
+          "version": "13.0.2",
+          "spec": {
+            "options": {
+              "alertThreshold": true,
+              "annotations": {
+                "clustering": -1,
+                "multiLane": false
+              },
+              "legend": {
+                "calcs": [],
+                "displayMode": "list",
+                "placement": "bottom",
+                "showLegend": true
+              },
+              "tooltip": {
+                "hideZeros": false,
+                "mode": "single",
+                "sort": "none"
+              }
+            },
+            "fieldConfig": {
+              "defaults": {
+                "thresholds": {
+                  "mode": "absolute",
+                  "steps": [
+                    {
+                      "value": 0,
+                      "color": "green"
+                    },
+                    {
+                      "value": 80,
+                      "color": "red"
+                    }
+                  ]
+                },
+                "color": {
+                  "mode": "palette-classic"
+                },
+                "custom": {
+                  "axisBorderShow": false,
+                  "axisCenteredZero": false,
+                  "axisColorMode": "text",
+                  "axisLabel": "",
+                  "axisPlacement": "auto",
+                  "barAlignment": 0,
+                  "barWidthFactor": 0.6,
+                  "drawStyle": "line",
+                  "fillOpacity": 0,
+                  "gradientMode": "none",
+                  "hideFrom": {
+                    "legend": false,
+                    "tooltip": false,
+                    "viz": false
+                  },
+                  "insertNulls": false,
+                  "lineInterpolation": "linear",
+                  "lineWidth": 1,
+                  "pointSize": 5,
+                  "scaleDistribution": {
+                    "type": "linear"
+                  },
+                  "showPoints": "auto",
+                  "showValues": false,
+                  "spanNulls": false,
+                  "stacking": {
+                    "group": "A",
+                    "mode": "none"
+                  },
+                  "thresholdsStyle": {
+                    "mode": "off"
+                  }
+                }
+              },
+              "overrides": []
+            }
+          }
+        }
+      }
+    },
+    "engine.vllm.metric.specdecoding_mean_acceptance_length": {
+      "kind": "Panel",
+      "spec": {
+        "id": 35,
+        "title": "SpecDecoding: Mean Acceptance Length",
+        "description": "Mean number of drafts per speculation",
+        "links": [],
+        "data": {
+          "kind": "QueryGroup",
+          "spec": {
+            "queries": [
+              {
+                "kind": "PanelQuery",
+                "spec": {
+                  "query": {
+                    "kind": "DataQuery",
+                    "group": "prometheus",
+                    "version": "v0",
+                    "spec": {
+                      "editorMode": "code",
+                      "exemplar": true,
+                      "expr": "sum by (model_name, replica) (rate(vllm:spec_decode_num_draft_tokens_total{model_name=~\"$vllm_model_name\", engine=~\"$workerid\", replica=~\"$replica\"}[$interval])) / sum by (model_name, replica) (rate(vllm:spec_decode_num_drafts_total{model_name=~\"$vllm_model_name\", engine=~\"$workerid\", replica=~\"$replica\"}[$interval]))",
+                      "interval": "",
+                      "legendFormat": "{{model_name}} - replica {{replica}}",
+                      "queryType": "randomWalk",
+                      "range": true
+                    },
+                    "labels": {
+                      "grafana.app/export-label": "prometheus-1"
+                    }
+                  },
+                  "refId": "A",
+                  "hidden": false
+                }
+              }
+            ],
+            "transformations": [],
+            "queryOptions": {}
+          }
+        },
+        "vizConfig": {
+          "kind": "VizConfig",
+          "group": "timeseries",
+          "version": "13.0.2",
+          "spec": {
+            "options": {
+              "alertThreshold": true,
+              "annotations": {
+                "clustering": -1,
+                "multiLane": false
+              },
+              "legend": {
+                "calcs": [
+                  "lastNotNull"
+                ],
+                "displayMode": "table",
+                "placement": "bottom",
+                "showLegend": true
+              },
+              "tooltip": {
+                "hideZeros": false,
+                "mode": "multi",
+                "sort": "none"
+              }
+            },
+            "fieldConfig": {
+              "defaults": {
+                "unit": "short",
+                "min": 0,
+                "thresholds": {
+                  "mode": "absolute",
+                  "steps": [
+                    {
+                      "value": 0,
+                      "color": "super-light-yellow"
+                    },
+                    {
+                      "value": 1,
+                      "color": "super-light-green"
+                    },
+                    {
+                      "value": 2,
+                      "color": "green"
+                    }
+                  ]
+                },
+                "color": {
+                  "mode": "palette-classic"
+                },
+                "custom": {
+                  "axisBorderShow": false,
+                  "axisCenteredZero": false,
+                  "axisColorMode": "text",
+                  "axisLabel": "",
+                  "axisPlacement": "auto",
+                  "barAlignment": 0,
+                  "barWidthFactor": 0.6,
+                  "drawStyle": "line",
+                  "fillOpacity": 10,
+                  "gradientMode": "none",
+                  "hideFrom": {
+                    "legend": false,
+                    "tooltip": false,
+                    "viz": false
+                  },
+                  "insertNulls": false,
+                  "lineInterpolation": "linear",
+                  "lineWidth": 2,
+                  "pointSize": 5,
+                  "scaleDistribution": {
+                    "type": "linear"
+                  },
+                  "showPoints": "never",
+                  "showValues": false,
+                  "spanNulls": false,
+                  "stacking": {
+                    "group": "A",
+                    "mode": "none"
+                  },
+                  "thresholdsStyle": {
+                    "mode": "line"
+                  }
+                }
+              },
+              "overrides": []
+            }
+          }
+        }
+      }
+    },
+    "engine.vllm.metric.specdecoding_accepted_vs_drafted_throughput": {
+      "kind": "Panel",
+      "spec": {
+        "id": 30,
+        "title": "SpecDecoding: Accepted vs Drafted Throughput",
+        "description": "Speculative Decoding metrics showing draft and accepted token rates",
+        "links": [],
+        "data": {
+          "kind": "QueryGroup",
+          "spec": {
+            "queries": [
+              {
+                "kind": "PanelQuery",
+                "spec": {
+                  "query": {
+                    "kind": "DataQuery",
+                    "group": "prometheus",
+                    "version": "v0",
+                    "spec": {
+                      "editorMode": "code",
+                      "exemplar": true,
+                      "expr": "rate(vllm:spec_decode_num_accepted_tokens_total{model_name=~\"$vllm_model_name\", engine=~\"$workerid\", replica=~\"$replica\"}[$interval])",
+                      "interval": "",
+                      "legendFormat": "Accepted Throughput - {{model_name}} - replica {{replica}}",
+                      "queryType": "randomWalk",
+                      "range": true
+                    },
+                    "labels": {
+                      "grafana.app/export-label": "prometheus-1"
+                    }
+                  },
+                  "refId": "A",
+                  "hidden": false
+                }
+              },
+              {
+                "kind": "PanelQuery",
+                "spec": {
+                  "query": {
+                    "kind": "DataQuery",
+                    "group": "prometheus",
+                    "version": "v0",
+                    "spec": {
+                      "editorMode": "code",
+                      "exemplar": true,
+                      "expr": "rate(vllm:spec_decode_num_draft_tokens_total{model_name=~\"$vllm_model_name\", engine=~\"$workerid\", replica=~\"$replica\"}[$interval])",
+                      "interval": "",
+                      "legendFormat": "Drafted Throughput - {{model_name}} - replica {{replica}}",
+                      "queryType": "randomWalk",
+                      "range": true
+                    },
+                    "labels": {
+                      "grafana.app/export-label": "prometheus-1"
+                    }
+                  },
+                  "refId": "B",
+                  "hidden": false
+                }
+              }
+            ],
+            "transformations": [],
+            "queryOptions": {}
+          }
+        },
+        "vizConfig": {
+          "kind": "VizConfig",
+          "group": "timeseries",
+          "version": "13.0.2",
+          "spec": {
+            "options": {
+              "alertThreshold": true,
+              "annotations": {
+                "clustering": -1,
+                "multiLane": false
+              },
+              "legend": {
+                "calcs": [
+                  "lastNotNull"
+                ],
+                "displayMode": "table",
+                "placement": "bottom",
+                "showLegend": true
+              },
+              "tooltip": {
+                "hideZeros": false,
+                "mode": "multi",
+                "sort": "none"
+              }
+            },
+            "fieldConfig": {
+              "defaults": {
+                "unit": "tokens/s",
+                "min": 0,
+                "thresholds": {
+                  "mode": "absolute",
+                  "steps": [
+                    {
+                      "value": 0,
+                      "color": "green"
+                    }
+                  ]
+                },
+                "color": {
+                  "mode": "palette-classic"
+                },
+                "custom": {
+                  "axisBorderShow": false,
+                  "axisCenteredZero": false,
+                  "axisColorMode": "text",
+                  "axisLabel": "",
+                  "axisPlacement": "auto",
+                  "barAlignment": 0,
+                  "barWidthFactor": 0.6,
+                  "drawStyle": "line",
+                  "fillOpacity": 10,
+                  "gradientMode": "none",
+                  "hideFrom": {
+                    "legend": false,
+                    "tooltip": false,
+                    "viz": false
+                  },
+                  "insertNulls": false,
+                  "lineInterpolation": "linear",
+                  "lineWidth": 2,
+                  "pointSize": 5,
+                  "scaleDistribution": {
+                    "type": "linear"
+                  },
+                  "showPoints": "never",
+                  "showValues": false,
+                  "spanNulls": false,
+                  "stacking": {
+                    "group": "A",
+                    "mode": "none"
+                  },
+                  "thresholdsStyle": {
+                    "mode": "off"
+                  }
+                }
+              },
+              "overrides": []
+            }
+          }
+        }
+      }
+    },
+    "engine.vllm.metric.specdecoding_draft_acceptance_rate": {
+      "kind": "Panel",
+      "spec": {
+        "id": 33,
+        "title": "SpecDecoding: Draft Acceptance Rate",
+        "description": "Speculative Decoding acceptance rate percentage",
+        "links": [],
+        "data": {
+          "kind": "QueryGroup",
+          "spec": {
+            "queries": [
+              {
+                "kind": "PanelQuery",
+                "spec": {
+                  "query": {
+                    "kind": "DataQuery",
+                    "group": "prometheus",
+                    "version": "v0",
+                    "spec": {
+                      "editorMode": "code",
+                      "exemplar": true,
+                      "expr": "sum by (model_name, replica) (rate(vllm:spec_decode_num_accepted_tokens_total{model_name=~\"$vllm_model_name\", engine=~\"$workerid\", replica=~\"$replica\"}[$interval])) / sum by (model_name, replica) (rate(vllm:spec_decode_num_draft_tokens_total{model_name=~\"$vllm_model_name\", engine=~\"$workerid\", replica=~\"$replica\"}[$interval])) * 100",
+                      "interval": "",
+                      "legendFormat": "{{model_name}} - replica {{replica}}",
+                      "queryType": "randomWalk",
+                      "range": true
+                    },
+                    "labels": {
+                      "grafana.app/export-label": "prometheus-1"
+                    }
+                  },
+                  "refId": "A",
+                  "hidden": false
+                }
+              }
+            ],
+            "transformations": [],
+            "queryOptions": {}
+          }
+        },
+        "vizConfig": {
+          "kind": "VizConfig",
+          "group": "timeseries",
+          "version": "13.0.2",
+          "spec": {
+            "options": {
+              "alertThreshold": true,
+              "annotations": {
+                "clustering": -1,
+                "multiLane": false
+              },
+              "legend": {
+                "calcs": [
+                  "lastNotNull"
+                ],
+                "displayMode": "table",
+                "placement": "bottom",
+                "showLegend": true
+              },
+              "tooltip": {
+                "hideZeros": false,
+                "mode": "multi",
+                "sort": "none"
+              }
+            },
+            "fieldConfig": {
+              "defaults": {
+                "unit": "percent",
+                "min": 0,
+                "max": 100,
+                "thresholds": {
+                  "mode": "absolute",
+                  "steps": [
+                    {
+                      "value": 0,
+                      "color": "red"
+                    },
+                    {
+                      "value": 80,
+                      "color": "yellow"
+                    },
+                    {
+                      "value": 90,
+                      "color": "green"
+                    }
+                  ]
+                },
+                "color": {
+                  "mode": "palette-classic"
+                },
+                "custom": {
+                  "axisBorderShow": false,
+                  "axisCenteredZero": false,
+                  "axisColorMode": "text",
+                  "axisLabel": "",
+                  "axisPlacement": "auto",
+                  "barAlignment": 0,
+                  "barWidthFactor": 0.6,
+                  "drawStyle": "line",
+                  "fillOpacity": 10,
+                  "gradientMode": "none",
+                  "hideFrom": {
+                    "legend": false,
+                    "tooltip": false,
+                    "viz": false
+                  },
+                  "insertNulls": false,
+                  "lineInterpolation": "linear",
+                  "lineWidth": 2,
+                  "pointSize": 5,
+                  "scaleDistribution": {
+                    "type": "linear"
+                  },
+                  "showPoints": "never",
+                  "showValues": false,
+                  "spanNulls": false,
+                  "stacking": {
+                    "group": "A",
+                    "mode": "none"
+                  },
+                  "thresholdsStyle": {
+                    "mode": "line"
+                  }
+                }
+              },
+              "overrides": []
+            }
+          }
+        }
+      }
+    },
+    "engine.vllm.metric.specdecoding_accepted_vs_drafted_tokens": {
+      "kind": "Panel",
+      "spec": {
+        "id": 32,
+        "title": "SpecDecoding: Accepted vs Drafted Tokens",
+        "description": "Total accepted and drafted tokens in speculative decoding",
+        "links": [],
+        "data": {
+          "kind": "QueryGroup",
+          "spec": {
+            "queries": [
+              {
+                "kind": "PanelQuery",
+                "spec": {
+                  "query": {
+                    "kind": "DataQuery",
+                    "group": "prometheus",
+                    "version": "v0",
+                    "spec": {
+                      "editorMode": "code",
+                      "exemplar": true,
+                      "expr": "increase(vllm:spec_decode_num_accepted_tokens_total{model_name=~\"$vllm_model_name\", engine=~\"$workerid\", replica=~\"$replica\"}[$interval])",
+                      "interval": "",
+                      "legendFormat": "Accepted - {{model_name}} - replica {{replica}}",
+                      "queryType": "randomWalk",
+                      "range": true
+                    },
+                    "labels": {
+                      "grafana.app/export-label": "prometheus-1"
+                    }
+                  },
+                  "refId": "A",
+                  "hidden": false
+                }
+              },
+              {
+                "kind": "PanelQuery",
+                "spec": {
+                  "query": {
+                    "kind": "DataQuery",
+                    "group": "prometheus",
+                    "version": "v0",
+                    "spec": {
+                      "editorMode": "code",
+                      "exemplar": true,
+                      "expr": "increase(vllm:spec_decode_num_draft_tokens_total{model_name=~\"$vllm_model_name\", engine=~\"$workerid\", replica=~\"$replica\"}[$interval])",
+                      "interval": "",
+                      "legendFormat": "Drafted - {{model_name}} - replica {{replica}}",
+                      "queryType": "randomWalk",
+                      "range": true
+                    },
+                    "labels": {
+                      "grafana.app/export-label": "prometheus-1"
+                    }
+                  },
+                  "refId": "B",
+                  "hidden": false
+                }
+              }
+            ],
+            "transformations": [],
+            "queryOptions": {}
+          }
+        },
+        "vizConfig": {
+          "kind": "VizConfig",
+          "group": "timeseries",
+          "version": "13.0.2",
+          "spec": {
+            "options": {
+              "alertThreshold": true,
+              "annotations": {
+                "clustering": -1,
+                "multiLane": false
+              },
+              "legend": {
+                "calcs": [
+                  "lastNotNull"
+                ],
+                "displayMode": "table",
+                "placement": "bottom",
+                "showLegend": true
+              },
+              "tooltip": {
+                "hideZeros": false,
+                "mode": "multi",
+                "sort": "none"
+              }
+            },
+            "fieldConfig": {
+              "defaults": {
+                "unit": "short",
+                "min": 0,
+                "thresholds": {
+                  "mode": "absolute",
+                  "steps": [
+                    {
+                      "value": 0,
+                      "color": "green"
+                    }
+                  ]
+                },
+                "color": {
+                  "mode": "palette-classic"
+                },
+                "custom": {
+                  "axisBorderShow": false,
+                  "axisCenteredZero": false,
+                  "axisColorMode": "text",
+                  "axisLabel": "",
+                  "axisPlacement": "auto",
+                  "barAlignment": 0,
+                  "barWidthFactor": 0.6,
+                  "drawStyle": "line",
+                  "fillOpacity": 10,
+                  "gradientMode": "none",
+                  "hideFrom": {
+                    "legend": false,
+                    "tooltip": false,
+                    "viz": false
+                  },
+                  "insertNulls": false,
+                  "lineInterpolation": "linear",
+                  "lineWidth": 2,
+                  "pointSize": 5,
+                  "scaleDistribution": {
+                    "type": "linear"
+                  },
+                  "showPoints": "never",
+                  "showValues": false,
+                  "spanNulls": false,
+                  "stacking": {
+                    "group": "A",
+                    "mode": "none"
+                  },
+                  "thresholdsStyle": {
+                    "mode": "off"
+                  }
+                }
+              },
+              "overrides": []
+            }
+          }
+        }
+      }
+    },
+    "engine.vllm.metric.specdecoding_draft_acceptance_rate.2": {
+      "kind": "Panel",
+      "spec": {
+        "id": 31,
+        "title": "SpecDecoding: Draft Acceptance Rate",
+        "description": "Speculative Decoding acceptance rate percentage",
+        "links": [],
+        "data": {
+          "kind": "QueryGroup",
+          "spec": {
+            "queries": [
+              {
+                "kind": "PanelQuery",
+                "spec": {
+                  "query": {
+                    "kind": "DataQuery",
+                    "group": "prometheus",
+                    "version": "v0",
+                    "spec": {
+                      "editorMode": "code",
+                      "exemplar": true,
+                      "expr": "sum by (model_name, replica) (rate(vllm:spec_decode_num_accepted_tokens_total{model_name=~\"$vllm_model_name\", engine=~\"$workerid\", replica=~\"$replica\"}[$interval])) / sum by (model_name, replica) (rate(vllm:spec_decode_num_draft_tokens_total{model_name=~\"$vllm_model_name\", engine=~\"$workerid\", replica=~\"$replica\"}[$interval])) * 100",
+                      "interval": "",
+                      "legendFormat": "{{model_name}} - replica {{replica}}",
+                      "queryType": "randomWalk",
+                      "range": true
+                    },
+                    "labels": {
+                      "grafana.app/export-label": "prometheus-1"
+                    }
+                  },
+                  "refId": "A",
+                  "hidden": false
+                }
+              }
+            ],
+            "transformations": [],
+            "queryOptions": {}
+          }
+        },
+        "vizConfig": {
+          "kind": "VizConfig",
+          "group": "stat",
+          "version": "13.0.2",
+          "spec": {
+            "options": {
+              "colorMode": "value",
+              "graphMode": "area",
+              "justifyMode": "auto",
+              "orientation": "auto",
+              "percentChangeColorMode": "standard",
+              "reduceOptions": {
+                "calcs": [
+                  "lastNotNull"
+                ],
+                "fields": "",
+                "values": false
+              },
+              "showPercentChange": false,
+              "text": {},
+              "textMode": "auto",
+              "wideLayout": true
+            },
+            "fieldConfig": {
+              "defaults": {
+                "unit": "percent",
+                "min": 0,
+                "max": 100,
+                "thresholds": {
+                  "mode": "absolute",
+                  "steps": [
+                    {
+                      "value": 0,
+                      "color": "red"
+                    },
+                    {
+                      "value": 80,
+                      "color": "yellow"
+                    },
+                    {
+                      "value": 90,
+                      "color": "green"
+                    }
+                  ]
+                },
+                "color": {
+                  "mode": "thresholds"
+                }
+              },
+              "overrides": []
+            }
+          }
+        }
+      }
+    },
+    "engine.vllm.metric.specdecoding_mean_acceptance_length.2": {
+      "kind": "Panel",
+      "spec": {
+        "id": 36,
+        "title": "SpecDecoding: Mean Acceptance Length",
+        "description": "Mean number of drafts per speculation",
+        "links": [],
+        "data": {
+          "kind": "QueryGroup",
+          "spec": {
+            "queries": [
+              {
+                "kind": "PanelQuery",
+                "spec": {
+                  "query": {
+                    "kind": "DataQuery",
+                    "group": "prometheus",
+                    "version": "v0",
+                    "spec": {
+                      "editorMode": "code",
+                      "exemplar": true,
+                      "expr": "sum by (model_name, replica) (rate(vllm:spec_decode_num_draft_tokens_total{model_name=~\"$vllm_model_name\", engine=~\"$workerid\", replica=~\"$replica\"}[$interval])) / sum by (model_name, replica) (rate(vllm:spec_decode_num_drafts_total{model_name=~\"$vllm_model_name\", engine=~\"$workerid\", replica=~\"$replica\"}[$interval]))",
+                      "interval": "",
+                      "legendFormat": "{{model_name}} - replica {{replica}}",
+                      "queryType": "randomWalk",
+                      "range": true
+                    },
+                    "labels": {
+                      "grafana.app/export-label": "prometheus-1"
+                    }
+                  },
+                  "refId": "A",
+                  "hidden": false
+                }
+              }
+            ],
+            "transformations": [],
+            "queryOptions": {}
+          }
+        },
+        "vizConfig": {
+          "kind": "VizConfig",
+          "group": "stat",
+          "version": "13.0.2",
+          "spec": {
+            "options": {
+              "colorMode": "value",
+              "graphMode": "area",
+              "justifyMode": "auto",
+              "orientation": "auto",
+              "percentChangeColorMode": "standard",
+              "reduceOptions": {
+                "calcs": [
+                  "lastNotNull"
+                ],
+                "fields": "",
+                "values": false
+              },
+              "showPercentChange": false,
+              "text": {},
+              "textMode": "auto",
+              "wideLayout": true
+            },
+            "fieldConfig": {
+              "defaults": {
+                "unit": "short",
+                "min": 0,
+                "thresholds": {
+                  "mode": "absolute",
+                  "steps": [
+                    {
+                      "value": 0,
+                      "color": "super-light-yellow"
+                    },
+                    {
+                      "value": 1,
+                      "color": "super-light-green"
+                    },
+                    {
+                      "value": 2,
+                      "color": "green"
+                    }
+                  ]
+                },
+                "color": {
+                  "mode": "thresholds"
+                }
+              },
+              "overrides": []
+            }
+          }
+        }
+      }
+    }
+  },
+  "row": {
+    "kind": "RowsLayoutRow",
+    "spec": {
+      "title": "vllm engine metric",
+      "collapse": true,
+      "layout": {
+        "kind": "GridLayout",
+        "spec": {
+          "items": [
+            {
+              "kind": "GridLayoutItem",
+              "spec": {
+                "x": 0,
+                "y": 0,
+                "width": 12,
+                "height": 8,
+                "element": {
+                  "kind": "ElementReference",
+                  "name": "engine.vllm.metric.vllm_token_throughput"
+                }
+              }
+            },
+            {
+              "kind": "GridLayoutItem",
+              "spec": {
+                "x": 12,
+                "y": 0,
+                "width": 12,
+                "height": 8,
+                "element": {
+                  "kind": "ElementReference",
+                  "name": "engine.vllm.metric.vllm_time_per_output_token_latency"
+                }
+              }
+            },
+            {
+              "kind": "GridLayoutItem",
+              "spec": {
+                "x": 0,
+                "y": 8,
+                "width": 12,
+                "height": 8,
+                "element": {
+                  "kind": "ElementReference",
+                  "name": "engine.vllm.metric.vllm_cache_utilization"
+                }
+              }
+            },
+            {
+              "kind": "GridLayoutItem",
+              "spec": {
+                "x": 12,
+                "y": 8,
+                "width": 12,
+                "height": 8,
+                "element": {
+                  "kind": "ElementReference",
+                  "name": "engine.vllm.metric.vllm_time_to_first_token_latency"
+                }
+              }
+            },
+            {
+              "kind": "GridLayoutItem",
+              "spec": {
+                "x": 0,
+                "y": 16,
+                "width": 12,
+                "height": 8,
+                "element": {
+                  "kind": "ElementReference",
+                  "name": "engine.vllm.metric.vllm_e2e_request_latency"
+                }
+              }
+            },
+            {
+              "kind": "GridLayoutItem",
+              "spec": {
+                "x": 12,
+                "y": 16,
+                "width": 12,
+                "height": 8,
+                "element": {
+                  "kind": "ElementReference",
+                  "name": "engine.vllm.metric.vllm_scheduler_state"
+                }
+              }
+            },
+            {
+              "kind": "GridLayoutItem",
+              "spec": {
+                "x": 0,
+                "y": 24,
+                "width": 12,
+                "height": 8,
+                "element": {
+                  "kind": "ElementReference",
+                  "name": "engine.vllm.metric.vllm_request_prompt_length"
+                }
+              }
+            },
+            {
+              "kind": "GridLayoutItem",
+              "spec": {
+                "x": 12,
+                "y": 24,
+                "width": 12,
+                "height": 8,
+                "element": {
+                  "kind": "ElementReference",
+                  "name": "engine.vllm.metric.vllm_request_generation_length"
+                }
+              }
+            },
+            {
+              "kind": "GridLayoutItem",
+              "spec": {
+                "x": 0,
+                "y": 32,
+                "width": 12,
+                "height": 8,
+                "element": {
+                  "kind": "ElementReference",
+                  "name": "engine.vllm.metric.vllm_finish_reason"
+                }
+              }
+            },
+            {
+              "kind": "GridLayoutItem",
+              "spec": {
+                "x": 12,
+                "y": 32,
+                "width": 12,
+                "height": 8,
+                "element": {
+                  "kind": "ElementReference",
+                  "name": "engine.vllm.metric.vllm_queue_time"
+                }
+              }
+            },
+            {
+              "kind": "GridLayoutItem",
+              "spec": {
+                "x": 0,
+                "y": 40,
+                "width": 12,
+                "height": 8,
+                "element": {
+                  "kind": "ElementReference",
+                  "name": "engine.vllm.metric.vllm_requests_prefill_and_decode_time"
+                }
+              }
+            },
+            {
+              "kind": "GridLayoutItem",
+              "spec": {
+                "x": 12,
+                "y": 40,
+                "width": 12,
+                "height": 8,
+                "element": {
+                  "kind": "ElementReference",
+                  "name": "engine.vllm.metric.vllm_max_generation_token_in_sequence_group"
+                }
+              }
+            },
+            {
+              "kind": "GridLayoutItem",
+              "spec": {
+                "x": 0,
+                "y": 48,
+                "width": 12,
+                "height": 8,
+                "element": {
+                  "kind": "ElementReference",
+                  "name": "engine.vllm.metric.vllm_prefix_cache_hit_rate"
+                }
+              }
+            },
+            {
+              "kind": "GridLayoutItem",
+              "spec": {
+                "x": 12,
+                "y": 48,
+                "width": 12,
+                "height": 8,
+                "element": {
+                  "kind": "ElementReference",
+                  "name": "engine.vllm.metric.specdecoding_mean_acceptance_length"
+                }
+              }
+            },
+            {
+              "kind": "GridLayoutItem",
+              "spec": {
+                "x": 0,
+                "y": 56,
+                "width": 12,
+                "height": 8,
+                "element": {
+                  "kind": "ElementReference",
+                  "name": "engine.vllm.metric.specdecoding_accepted_vs_drafted_throughput"
+                }
+              }
+            },
+            {
+              "kind": "GridLayoutItem",
+              "spec": {
+                "x": 12,
+                "y": 56,
+                "width": 12,
+                "height": 8,
+                "element": {
+                  "kind": "ElementReference",
+                  "name": "engine.vllm.metric.specdecoding_draft_acceptance_rate"
+                }
+              }
+            },
+            {
+              "kind": "GridLayoutItem",
+              "spec": {
+                "x": 0,
+                "y": 64,
+                "width": 12,
+                "height": 8,
+                "element": {
+                  "kind": "ElementReference",
+                  "name": "engine.vllm.metric.specdecoding_accepted_vs_drafted_tokens"
+                }
+              }
+            },
+            {
+              "kind": "GridLayoutItem",
+              "spec": {
+                "x": 12,
+                "y": 64,
+                "width": 12,
+                "height": 8,
+                "element": {
+                  "kind": "ElementReference",
+                  "name": "engine.vllm.metric.specdecoding_draft_acceptance_rate.2"
+                }
+              }
+            },
+            {
+              "kind": "GridLayoutItem",
+              "spec": {
+                "x": 0,
+                "y": 72,
+                "width": 12,
+                "height": 8,
+                "element": {
+                  "kind": "ElementReference",
+                  "name": "engine.vllm.metric.specdecoding_mean_acceptance_length.2"
+                }
+              }
+            }
+          ]
+        }
+      }
+    }
+  }
+}

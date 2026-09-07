@@ -1,0 +1,1764 @@
+{
+  "elements": {
+    "engine.sglang.metric.sglang_end_to_end_request_latency": {
+      "kind": "Panel",
+      "spec": {
+        "id": 1,
+        "title": "SGLang: End-to-End Request Latency",
+        "description": "End-to-end request latency from SGLang metrics (official dashboard query; metric prefix sglang:).",
+        "links": [],
+        "data": {
+          "kind": "QueryGroup",
+          "spec": {
+            "queries": [
+              {
+                "kind": "PanelQuery",
+                "spec": {
+                  "query": {
+                    "kind": "DataQuery",
+                    "group": "prometheus",
+                    "version": "v0",
+                    "spec": {
+                      "editorMode": "code",
+                      "exemplar": true,
+                      "expr": "histogram_quantile(0.99, sum by (le, replica) (rate({__name__=~\"sglang[:_]e2e_request_latency_seconds_bucket\", model_name=~\"$sglang_model_name\", replica=~\"$sglang_replica\"}[$__rate_interval])))",
+                      "interval": "",
+                      "legendFormat": "replica {{replica}} P99",
+                      "queryType": "randomWalk",
+                      "range": true
+                    }
+                  },
+                  "refId": "A",
+                  "hidden": false
+                }
+              },
+              {
+                "kind": "PanelQuery",
+                "spec": {
+                  "query": {
+                    "kind": "DataQuery",
+                    "group": "prometheus",
+                    "version": "v0",
+                    "spec": {
+                      "editorMode": "code",
+                      "exemplar": true,
+                      "expr": "histogram_quantile(0.9, sum by (le, replica) (rate({__name__=~\"sglang[:_]e2e_request_latency_seconds_bucket\", model_name=~\"$sglang_model_name\", replica=~\"$sglang_replica\"}[$__rate_interval])))",
+                      "interval": "",
+                      "legendFormat": "replica {{replica}} P90",
+                      "queryType": "randomWalk",
+                      "range": true
+                    }
+                  },
+                  "refId": "B",
+                  "hidden": false
+                }
+              },
+              {
+                "kind": "PanelQuery",
+                "spec": {
+                  "query": {
+                    "kind": "DataQuery",
+                    "group": "prometheus",
+                    "version": "v0",
+                    "spec": {
+                      "editorMode": "code",
+                      "exemplar": true,
+                      "expr": "histogram_quantile(0.5, sum by (le, replica) (rate({__name__=~\"sglang[:_]e2e_request_latency_seconds_bucket\", model_name=~\"$sglang_model_name\", replica=~\"$sglang_replica\"}[$__rate_interval])))",
+                      "interval": "",
+                      "legendFormat": "replica {{replica}} P50",
+                      "queryType": "randomWalk",
+                      "range": true
+                    }
+                  },
+                  "refId": "C",
+                  "hidden": false
+                }
+              },
+              {
+                "kind": "PanelQuery",
+                "spec": {
+                  "query": {
+                    "kind": "DataQuery",
+                    "group": "prometheus",
+                    "version": "v0",
+                    "spec": {
+                      "editorMode": "code",
+                      "exemplar": true,
+                      "expr": "sum by (replica) (rate({__name__=~\"sglang[:_]e2e_request_latency_seconds_sum\", model_name=~\"$sglang_model_name\", replica=~\"$sglang_replica\"}[$__rate_interval])) / sum by (replica) (rate({__name__=~\"sglang[:_]e2e_request_latency_seconds_count\", model_name=~\"$sglang_model_name\", replica=~\"$sglang_replica\"}[$__rate_interval]))",
+                      "interval": "",
+                      "legendFormat": "replica {{replica}} Avg",
+                      "queryType": "randomWalk",
+                      "range": true
+                    }
+                  },
+                  "refId": "D",
+                  "hidden": false
+                }
+              }
+            ],
+            "transformations": [],
+            "queryOptions": {}
+          }
+        },
+        "vizConfig": {
+          "kind": "VizConfig",
+          "group": "timeseries",
+          "version": "13.0.2",
+          "spec": {
+            "options": {
+              "alertThreshold": true,
+              "annotations": {
+                "clustering": -1,
+                "multiLane": false
+              },
+              "legend": {
+                "calcs": [
+                  "lastNotNull"
+                ],
+                "displayMode": "table",
+                "placement": "bottom",
+                "showLegend": true
+              },
+              "tooltip": {
+                "hideZeros": false,
+                "mode": "multi",
+                "sort": "none"
+              }
+            },
+            "fieldConfig": {
+              "defaults": {
+                "unit": "s",
+                "min": 0,
+                "thresholds": {
+                  "mode": "absolute",
+                  "steps": [
+                    {
+                      "value": 0,
+                      "color": "green"
+                    },
+                    {
+                      "value": 80,
+                      "color": "red"
+                    }
+                  ]
+                },
+                "color": {
+                  "mode": "palette-classic"
+                },
+                "custom": {
+                  "axisBorderShow": false,
+                  "axisCenteredZero": false,
+                  "axisColorMode": "text",
+                  "axisLabel": "",
+                  "axisPlacement": "auto",
+                  "barAlignment": 0,
+                  "barWidthFactor": 0.6,
+                  "drawStyle": "line",
+                  "fillOpacity": 10,
+                  "gradientMode": "none",
+                  "hideFrom": {
+                    "legend": false,
+                    "tooltip": false,
+                    "viz": false
+                  },
+                  "insertNulls": false,
+                  "lineInterpolation": "linear",
+                  "lineWidth": 2,
+                  "pointSize": 5,
+                  "scaleDistribution": {
+                    "type": "linear"
+                  },
+                  "showPoints": "never",
+                  "showValues": false,
+                  "spanNulls": false,
+                  "stacking": {
+                    "group": "A",
+                    "mode": "none"
+                  },
+                  "thresholdsStyle": {
+                    "mode": "off"
+                  }
+                }
+              },
+              "overrides": [
+                {
+                  "matcher": {
+                    "id": "byName",
+                    "options": "MAX"
+                  },
+                  "properties": [
+                    {
+                      "id": "color",
+                      "value": {
+                        "fixedColor": "#1F60C4",
+                        "mode": "fixed"
+                      }
+                    },
+                    {
+                      "id": "custom.fillOpacity",
+                      "value": 0
+                    },
+                    {
+                      "id": "custom.stacking",
+                      "value": {
+                        "group": "A",
+                        "mode": "none"
+                      }
+                    },
+                    {
+                      "id": "custom.lineStyle",
+                      "value": {
+                        "dash": [
+                          10,
+                          10
+                        ],
+                        "fill": "dash"
+                      }
+                    }
+                  ]
+                },
+                {
+                  "matcher": {
+                    "id": "byName",
+                    "options": "MAX + PENDING"
+                  },
+                  "properties": [
+                    {
+                      "id": "color",
+                      "value": {
+                        "fixedColor": "#777777",
+                        "mode": "fixed"
+                      }
+                    },
+                    {
+                      "id": "custom.fillOpacity",
+                      "value": 0
+                    },
+                    {
+                      "id": "custom.stacking",
+                      "value": {
+                        "group": "A",
+                        "mode": "none"
+                      }
+                    },
+                    {
+                      "id": "custom.lineStyle",
+                      "value": {
+                        "dash": [
+                          10,
+                          10
+                        ],
+                        "fill": "dash"
+                      }
+                    }
+                  ]
+                },
+                {
+                  "matcher": {
+                    "id": "byValue",
+                    "options": {
+                      "op": "gte",
+                      "reducer": "allIsZero",
+                      "value": 0
+                    }
+                  },
+                  "properties": [
+                    {
+                      "id": "custom.hideFrom",
+                      "value": {
+                        "legend": true,
+                        "tooltip": true,
+                        "viz": false
+                      }
+                    }
+                  ]
+                }
+              ]
+            }
+          }
+        }
+      }
+    },
+    "engine.sglang.metric.sglang_end_to_end_request_latency_heatmap": {
+      "kind": "Panel",
+      "spec": {
+        "id": 2,
+        "title": "SGLang: End-to-End Request Latency Heatmap",
+        "description": "Heatmap of end-to-end request latency buckets.",
+        "links": [],
+        "data": {
+          "kind": "QueryGroup",
+          "spec": {
+            "queries": [
+              {
+                "kind": "PanelQuery",
+                "spec": {
+                  "query": {
+                    "kind": "DataQuery",
+                    "group": "prometheus",
+                    "version": "v0",
+                    "spec": {
+                      "editorMode": "builder",
+                      "exemplar": true,
+                      "expr": "sum by (le, replica) (increase({__name__=~\"sglang[:_]e2e_request_latency_seconds_bucket\", model_name=~\"$sglang_model_name\", replica=~\"$sglang_replica\"}[$__rate_interval]))",
+                      "interval": "",
+                      "legendFormat": "replica {{replica}} le {{le}}",
+                      "queryType": "randomWalk",
+                      "range": true,
+                      "format": "heatmap",
+                      "fullMetaSearch": false,
+                      "includeNullMetadata": true,
+                      "useBackend": false
+                    }
+                  },
+                  "refId": "A",
+                  "hidden": false
+                }
+              }
+            ],
+            "transformations": [],
+            "queryOptions": {}
+          }
+        },
+        "vizConfig": {
+          "kind": "VizConfig",
+          "group": "heatmap",
+          "version": "13.0.2",
+          "spec": {
+            "options": {
+              "annotations": {
+                "clustering": -1,
+                "multiLane": false
+              },
+              "calculate": false,
+              "cellGap": 1,
+              "cellValues": {
+                "unit": "none"
+              },
+              "color": {
+                "exponent": 0.5,
+                "fill": "dark-orange",
+                "min": 0,
+                "mode": "scheme",
+                "reverse": false,
+                "scale": "exponential",
+                "scheme": "Spectral",
+                "steps": 64
+              },
+              "exemplars": {
+                "color": "rgba(255,0,255,0.7)"
+              },
+              "filterValues": {
+                "le": 1e-09
+              },
+              "legend": {
+                "show": true,
+                "showLegend": true
+              },
+              "rowsFrame": {
+                "layout": "auto",
+                "value": "Request count"
+              },
+              "tooltip": {
+                "mode": "single",
+                "showColorScale": false,
+                "yHistogram": true
+              },
+              "yAxis": {
+                "axisPlacement": "left",
+                "reverse": false,
+                "unit": "s"
+              }
+            },
+            "fieldConfig": {
+              "defaults": {
+                "custom": {
+                  "hideFrom": {
+                    "legend": false,
+                    "tooltip": false,
+                    "viz": false
+                  },
+                  "scaleDistribution": {
+                    "type": "linear"
+                  }
+                }
+              },
+              "overrides": []
+            }
+          }
+        }
+      }
+    },
+    "engine.sglang.metric.sglang_time_to_first_token_latency": {
+      "kind": "Panel",
+      "spec": {
+        "id": 3,
+        "title": "SGLang: Time-To-First-Token Latency",
+        "description": "Time to first token latency from SGLang metrics.",
+        "links": [],
+        "data": {
+          "kind": "QueryGroup",
+          "spec": {
+            "queries": [
+              {
+                "kind": "PanelQuery",
+                "spec": {
+                  "query": {
+                    "kind": "DataQuery",
+                    "group": "prometheus",
+                    "version": "v0",
+                    "spec": {
+                      "editorMode": "code",
+                      "exemplar": true,
+                      "expr": "histogram_quantile(0.99, sum by (le, replica) (rate({__name__=~\"sglang[:_]time_to_first_token_seconds_bucket\", model_name=~\"$sglang_model_name\", replica=~\"$sglang_replica\"}[$__rate_interval])))",
+                      "interval": "",
+                      "legendFormat": "replica {{replica}} P99",
+                      "queryType": "randomWalk",
+                      "range": true
+                    }
+                  },
+                  "refId": "A",
+                  "hidden": false
+                }
+              },
+              {
+                "kind": "PanelQuery",
+                "spec": {
+                  "query": {
+                    "kind": "DataQuery",
+                    "group": "prometheus",
+                    "version": "v0",
+                    "spec": {
+                      "editorMode": "code",
+                      "exemplar": true,
+                      "expr": "histogram_quantile(0.9, sum by (le, replica) (rate({__name__=~\"sglang[:_]time_to_first_token_seconds_bucket\", model_name=~\"$sglang_model_name\", replica=~\"$sglang_replica\"}[$__rate_interval])))",
+                      "interval": "",
+                      "legendFormat": "replica {{replica}} P90",
+                      "queryType": "randomWalk",
+                      "range": true
+                    }
+                  },
+                  "refId": "B",
+                  "hidden": false
+                }
+              },
+              {
+                "kind": "PanelQuery",
+                "spec": {
+                  "query": {
+                    "kind": "DataQuery",
+                    "group": "prometheus",
+                    "version": "v0",
+                    "spec": {
+                      "editorMode": "code",
+                      "exemplar": true,
+                      "expr": "histogram_quantile(0.5, sum by (le, replica) (rate({__name__=~\"sglang[:_]time_to_first_token_seconds_bucket\", model_name=~\"$sglang_model_name\", replica=~\"$sglang_replica\"}[$__rate_interval])))",
+                      "interval": "",
+                      "legendFormat": "replica {{replica}} P50",
+                      "queryType": "randomWalk",
+                      "range": true
+                    }
+                  },
+                  "refId": "C",
+                  "hidden": false
+                }
+              },
+              {
+                "kind": "PanelQuery",
+                "spec": {
+                  "query": {
+                    "kind": "DataQuery",
+                    "group": "prometheus",
+                    "version": "v0",
+                    "spec": {
+                      "editorMode": "code",
+                      "exemplar": true,
+                      "expr": "sum by (replica) (rate({__name__=~\"sglang[:_]time_to_first_token_seconds_sum\", model_name=~\"$sglang_model_name\", replica=~\"$sglang_replica\"}[$__rate_interval])) / sum by (replica) (rate({__name__=~\"sglang[:_]time_to_first_token_seconds_count\", model_name=~\"$sglang_model_name\", replica=~\"$sglang_replica\"}[$__rate_interval]))",
+                      "interval": "",
+                      "legendFormat": "replica {{replica}} Avg",
+                      "queryType": "randomWalk",
+                      "range": true
+                    }
+                  },
+                  "refId": "D",
+                  "hidden": false
+                }
+              }
+            ],
+            "transformations": [],
+            "queryOptions": {}
+          }
+        },
+        "vizConfig": {
+          "kind": "VizConfig",
+          "group": "timeseries",
+          "version": "13.0.2",
+          "spec": {
+            "options": {
+              "alertThreshold": true,
+              "annotations": {
+                "clustering": -1,
+                "multiLane": false
+              },
+              "legend": {
+                "calcs": [
+                  "lastNotNull"
+                ],
+                "displayMode": "table",
+                "placement": "bottom",
+                "showLegend": true
+              },
+              "tooltip": {
+                "hideZeros": false,
+                "mode": "multi",
+                "sort": "none"
+              }
+            },
+            "fieldConfig": {
+              "defaults": {
+                "unit": "s",
+                "min": 0,
+                "thresholds": {
+                  "mode": "absolute",
+                  "steps": [
+                    {
+                      "value": 0,
+                      "color": "green"
+                    },
+                    {
+                      "value": 80,
+                      "color": "red"
+                    }
+                  ]
+                },
+                "color": {
+                  "mode": "palette-classic"
+                },
+                "custom": {
+                  "axisBorderShow": false,
+                  "axisCenteredZero": false,
+                  "axisColorMode": "text",
+                  "axisLabel": "",
+                  "axisPlacement": "auto",
+                  "barAlignment": 0,
+                  "barWidthFactor": 0.6,
+                  "drawStyle": "line",
+                  "fillOpacity": 10,
+                  "gradientMode": "none",
+                  "hideFrom": {
+                    "legend": false,
+                    "tooltip": false,
+                    "viz": false
+                  },
+                  "insertNulls": false,
+                  "lineInterpolation": "linear",
+                  "lineWidth": 2,
+                  "pointSize": 5,
+                  "scaleDistribution": {
+                    "type": "linear"
+                  },
+                  "showPoints": "never",
+                  "showValues": false,
+                  "spanNulls": false,
+                  "stacking": {
+                    "group": "A",
+                    "mode": "none"
+                  },
+                  "thresholdsStyle": {
+                    "mode": "off"
+                  }
+                }
+              },
+              "overrides": [
+                {
+                  "matcher": {
+                    "id": "byName",
+                    "options": "MAX"
+                  },
+                  "properties": [
+                    {
+                      "id": "color",
+                      "value": {
+                        "fixedColor": "#1F60C4",
+                        "mode": "fixed"
+                      }
+                    },
+                    {
+                      "id": "custom.fillOpacity",
+                      "value": 0
+                    },
+                    {
+                      "id": "custom.stacking",
+                      "value": {
+                        "group": "A",
+                        "mode": "none"
+                      }
+                    },
+                    {
+                      "id": "custom.lineStyle",
+                      "value": {
+                        "dash": [
+                          10,
+                          10
+                        ],
+                        "fill": "dash"
+                      }
+                    }
+                  ]
+                },
+                {
+                  "matcher": {
+                    "id": "byName",
+                    "options": "MAX + PENDING"
+                  },
+                  "properties": [
+                    {
+                      "id": "color",
+                      "value": {
+                        "fixedColor": "#777777",
+                        "mode": "fixed"
+                      }
+                    },
+                    {
+                      "id": "custom.fillOpacity",
+                      "value": 0
+                    },
+                    {
+                      "id": "custom.stacking",
+                      "value": {
+                        "group": "A",
+                        "mode": "none"
+                      }
+                    },
+                    {
+                      "id": "custom.lineStyle",
+                      "value": {
+                        "dash": [
+                          10,
+                          10
+                        ],
+                        "fill": "dash"
+                      }
+                    }
+                  ]
+                },
+                {
+                  "matcher": {
+                    "id": "byValue",
+                    "options": {
+                      "op": "gte",
+                      "reducer": "allIsZero",
+                      "value": 0
+                    }
+                  },
+                  "properties": [
+                    {
+                      "id": "custom.hideFrom",
+                      "value": {
+                        "legend": true,
+                        "tooltip": true,
+                        "viz": false
+                      }
+                    }
+                  ]
+                }
+              ]
+            }
+          }
+        }
+      }
+    },
+    "engine.sglang.metric.sglang_time_to_first_token_heatmap": {
+      "kind": "Panel",
+      "spec": {
+        "id": 4,
+        "title": "SGLang: Time-To-First-Token Heatmap",
+        "description": "Heatmap of time-to-first-token latency buckets.",
+        "links": [],
+        "data": {
+          "kind": "QueryGroup",
+          "spec": {
+            "queries": [
+              {
+                "kind": "PanelQuery",
+                "spec": {
+                  "query": {
+                    "kind": "DataQuery",
+                    "group": "prometheus",
+                    "version": "v0",
+                    "spec": {
+                      "editorMode": "builder",
+                      "exemplar": false,
+                      "expr": "sum by (le, replica) (increase({__name__=~\"sglang[:_]time_to_first_token_seconds_bucket\", model_name=~\"$sglang_model_name\", replica=~\"$sglang_replica\"}[$__rate_interval]))",
+                      "interval": "",
+                      "legendFormat": "replica {{replica}} le {{le}}",
+                      "queryType": "randomWalk",
+                      "range": true,
+                      "format": "heatmap",
+                      "fullMetaSearch": false,
+                      "includeNullMetadata": true,
+                      "useBackend": false
+                    }
+                  },
+                  "refId": "A",
+                  "hidden": false
+                }
+              }
+            ],
+            "transformations": [],
+            "queryOptions": {}
+          }
+        },
+        "vizConfig": {
+          "kind": "VizConfig",
+          "group": "heatmap",
+          "version": "13.0.2",
+          "spec": {
+            "options": {
+              "annotations": {
+                "clustering": -1,
+                "multiLane": false
+              },
+              "calculate": false,
+              "cellGap": 1,
+              "cellValues": {
+                "unit": "none"
+              },
+              "color": {
+                "exponent": 0.5,
+                "fill": "dark-orange",
+                "min": 0,
+                "mode": "scheme",
+                "reverse": false,
+                "scale": "exponential",
+                "scheme": "Spectral",
+                "steps": 64
+              },
+              "exemplars": {
+                "color": "rgba(255,0,255,0.7)"
+              },
+              "filterValues": {
+                "le": 1e-09
+              },
+              "legend": {
+                "show": true,
+                "showLegend": true
+              },
+              "rowsFrame": {
+                "layout": "auto",
+                "value": "Request count"
+              },
+              "tooltip": {
+                "mode": "single",
+                "showColorScale": false,
+                "yHistogram": true
+              },
+              "yAxis": {
+                "axisPlacement": "left",
+                "reverse": false,
+                "unit": "s"
+              }
+            },
+            "fieldConfig": {
+              "defaults": {
+                "custom": {
+                  "hideFrom": {
+                    "legend": false,
+                    "tooltip": false,
+                    "viz": false
+                  },
+                  "scaleDistribution": {
+                    "type": "linear"
+                  }
+                }
+              },
+              "overrides": []
+            }
+          }
+        }
+      }
+    },
+    "engine.sglang.metric.sglang_num_running_requests": {
+      "kind": "Panel",
+      "spec": {
+        "id": 5,
+        "title": "SGLang: Num Running Requests",
+        "description": "Number of running requests in SGLang.",
+        "links": [],
+        "data": {
+          "kind": "QueryGroup",
+          "spec": {
+            "queries": [
+              {
+                "kind": "PanelQuery",
+                "spec": {
+                  "query": {
+                    "kind": "DataQuery",
+                    "group": "prometheus",
+                    "version": "v0",
+                    "spec": {
+                      "editorMode": "code",
+                      "exemplar": true,
+                      "expr": "{__name__=~\"sglang[:_]num_running_reqs\", model_name=~\"$sglang_model_name\", replica=~\"$sglang_replica\"}",
+                      "interval": "",
+                      "legendFormat": "replica {{replica}}",
+                      "queryType": "randomWalk",
+                      "range": true
+                    }
+                  },
+                  "refId": "A",
+                  "hidden": false
+                }
+              }
+            ],
+            "transformations": [],
+            "queryOptions": {}
+          }
+        },
+        "vizConfig": {
+          "kind": "VizConfig",
+          "group": "timeseries",
+          "version": "13.0.2",
+          "spec": {
+            "options": {
+              "alertThreshold": true,
+              "annotations": {
+                "clustering": -1,
+                "multiLane": false
+              },
+              "legend": {
+                "calcs": [
+                  "lastNotNull"
+                ],
+                "displayMode": "table",
+                "placement": "bottom",
+                "showLegend": true
+              },
+              "tooltip": {
+                "hideZeros": false,
+                "mode": "multi",
+                "sort": "none"
+              }
+            },
+            "fieldConfig": {
+              "defaults": {
+                "unit": "none",
+                "min": 0,
+                "thresholds": {
+                  "mode": "absolute",
+                  "steps": [
+                    {
+                      "value": 0,
+                      "color": "green"
+                    },
+                    {
+                      "value": 80,
+                      "color": "red"
+                    }
+                  ]
+                },
+                "color": {
+                  "mode": "palette-classic"
+                },
+                "custom": {
+                  "axisBorderShow": false,
+                  "axisCenteredZero": false,
+                  "axisColorMode": "text",
+                  "axisLabel": "",
+                  "axisPlacement": "auto",
+                  "barAlignment": 0,
+                  "barWidthFactor": 0.6,
+                  "drawStyle": "line",
+                  "fillOpacity": 10,
+                  "gradientMode": "none",
+                  "hideFrom": {
+                    "legend": false,
+                    "tooltip": false,
+                    "viz": false
+                  },
+                  "insertNulls": false,
+                  "lineInterpolation": "linear",
+                  "lineWidth": 2,
+                  "pointSize": 5,
+                  "scaleDistribution": {
+                    "type": "linear"
+                  },
+                  "showPoints": "never",
+                  "showValues": false,
+                  "spanNulls": false,
+                  "stacking": {
+                    "group": "A",
+                    "mode": "none"
+                  },
+                  "thresholdsStyle": {
+                    "mode": "off"
+                  }
+                }
+              },
+              "overrides": [
+                {
+                  "matcher": {
+                    "id": "byName",
+                    "options": "MAX"
+                  },
+                  "properties": [
+                    {
+                      "id": "color",
+                      "value": {
+                        "fixedColor": "#1F60C4",
+                        "mode": "fixed"
+                      }
+                    },
+                    {
+                      "id": "custom.fillOpacity",
+                      "value": 0
+                    },
+                    {
+                      "id": "custom.stacking",
+                      "value": {
+                        "group": "A",
+                        "mode": "none"
+                      }
+                    },
+                    {
+                      "id": "custom.lineStyle",
+                      "value": {
+                        "dash": [
+                          10,
+                          10
+                        ],
+                        "fill": "dash"
+                      }
+                    }
+                  ]
+                },
+                {
+                  "matcher": {
+                    "id": "byName",
+                    "options": "MAX + PENDING"
+                  },
+                  "properties": [
+                    {
+                      "id": "color",
+                      "value": {
+                        "fixedColor": "#777777",
+                        "mode": "fixed"
+                      }
+                    },
+                    {
+                      "id": "custom.fillOpacity",
+                      "value": 0
+                    },
+                    {
+                      "id": "custom.stacking",
+                      "value": {
+                        "group": "A",
+                        "mode": "none"
+                      }
+                    },
+                    {
+                      "id": "custom.lineStyle",
+                      "value": {
+                        "dash": [
+                          10,
+                          10
+                        ],
+                        "fill": "dash"
+                      }
+                    }
+                  ]
+                },
+                {
+                  "matcher": {
+                    "id": "byValue",
+                    "options": {
+                      "op": "gte",
+                      "reducer": "allIsZero",
+                      "value": 0
+                    }
+                  },
+                  "properties": [
+                    {
+                      "id": "custom.hideFrom",
+                      "value": {
+                        "legend": true,
+                        "tooltip": true,
+                        "viz": false
+                      }
+                    }
+                  ]
+                }
+              ]
+            }
+          }
+        }
+      }
+    },
+    "engine.sglang.metric.sglang_token_generation_throughput": {
+      "kind": "Panel",
+      "spec": {
+        "id": 6,
+        "title": "SGLang: Token Generation Throughput",
+        "description": "Token generation throughput (tokens/s).",
+        "links": [],
+        "data": {
+          "kind": "QueryGroup",
+          "spec": {
+            "queries": [
+              {
+                "kind": "PanelQuery",
+                "spec": {
+                  "query": {
+                    "kind": "DataQuery",
+                    "group": "prometheus",
+                    "version": "v0",
+                    "spec": {
+                      "editorMode": "code",
+                      "exemplar": true,
+                      "expr": "{__name__=~\"sglang[:_]gen_throughput\", model_name=~\"$sglang_model_name\", replica=~\"$sglang_replica\"}",
+                      "interval": "",
+                      "legendFormat": "replica {{replica}}",
+                      "queryType": "randomWalk",
+                      "range": true
+                    }
+                  },
+                  "refId": "A",
+                  "hidden": false
+                }
+              }
+            ],
+            "transformations": [],
+            "queryOptions": {}
+          }
+        },
+        "vizConfig": {
+          "kind": "VizConfig",
+          "group": "timeseries",
+          "version": "13.0.2",
+          "spec": {
+            "options": {
+              "alertThreshold": true,
+              "annotations": {
+                "clustering": -1,
+                "multiLane": false
+              },
+              "legend": {
+                "calcs": [
+                  "lastNotNull"
+                ],
+                "displayMode": "table",
+                "placement": "bottom",
+                "showLegend": true
+              },
+              "tooltip": {
+                "hideZeros": false,
+                "mode": "multi",
+                "sort": "none"
+              }
+            },
+            "fieldConfig": {
+              "defaults": {
+                "unit": "tokens/s",
+                "min": 0,
+                "thresholds": {
+                  "mode": "absolute",
+                  "steps": [
+                    {
+                      "value": 0,
+                      "color": "green"
+                    },
+                    {
+                      "value": 80,
+                      "color": "red"
+                    }
+                  ]
+                },
+                "color": {
+                  "mode": "palette-classic"
+                },
+                "custom": {
+                  "axisBorderShow": false,
+                  "axisCenteredZero": false,
+                  "axisColorMode": "text",
+                  "axisLabel": "",
+                  "axisPlacement": "auto",
+                  "barAlignment": 0,
+                  "barWidthFactor": 0.6,
+                  "drawStyle": "line",
+                  "fillOpacity": 10,
+                  "gradientMode": "none",
+                  "hideFrom": {
+                    "legend": false,
+                    "tooltip": false,
+                    "viz": false
+                  },
+                  "insertNulls": false,
+                  "lineInterpolation": "linear",
+                  "lineWidth": 2,
+                  "pointSize": 5,
+                  "scaleDistribution": {
+                    "type": "linear"
+                  },
+                  "showPoints": "never",
+                  "showValues": false,
+                  "spanNulls": false,
+                  "stacking": {
+                    "group": "A",
+                    "mode": "none"
+                  },
+                  "thresholdsStyle": {
+                    "mode": "off"
+                  }
+                }
+              },
+              "overrides": [
+                {
+                  "matcher": {
+                    "id": "byName",
+                    "options": "MAX"
+                  },
+                  "properties": [
+                    {
+                      "id": "color",
+                      "value": {
+                        "fixedColor": "#1F60C4",
+                        "mode": "fixed"
+                      }
+                    },
+                    {
+                      "id": "custom.fillOpacity",
+                      "value": 0
+                    },
+                    {
+                      "id": "custom.stacking",
+                      "value": {
+                        "group": "A",
+                        "mode": "none"
+                      }
+                    },
+                    {
+                      "id": "custom.lineStyle",
+                      "value": {
+                        "dash": [
+                          10,
+                          10
+                        ],
+                        "fill": "dash"
+                      }
+                    }
+                  ]
+                },
+                {
+                  "matcher": {
+                    "id": "byName",
+                    "options": "MAX + PENDING"
+                  },
+                  "properties": [
+                    {
+                      "id": "color",
+                      "value": {
+                        "fixedColor": "#777777",
+                        "mode": "fixed"
+                      }
+                    },
+                    {
+                      "id": "custom.fillOpacity",
+                      "value": 0
+                    },
+                    {
+                      "id": "custom.stacking",
+                      "value": {
+                        "group": "A",
+                        "mode": "none"
+                      }
+                    },
+                    {
+                      "id": "custom.lineStyle",
+                      "value": {
+                        "dash": [
+                          10,
+                          10
+                        ],
+                        "fill": "dash"
+                      }
+                    }
+                  ]
+                },
+                {
+                  "matcher": {
+                    "id": "byValue",
+                    "options": {
+                      "op": "gte",
+                      "reducer": "allIsZero",
+                      "value": 0
+                    }
+                  },
+                  "properties": [
+                    {
+                      "id": "custom.hideFrom",
+                      "value": {
+                        "legend": true,
+                        "tooltip": true,
+                        "viz": false
+                      }
+                    }
+                  ]
+                }
+              ]
+            }
+          }
+        }
+      }
+    },
+    "engine.sglang.metric.sglang_cache_hit_rate": {
+      "kind": "Panel",
+      "spec": {
+        "id": 7,
+        "title": "SGLang: Cache Hit Rate",
+        "description": "SGLang cache hit rate.",
+        "links": [],
+        "data": {
+          "kind": "QueryGroup",
+          "spec": {
+            "queries": [
+              {
+                "kind": "PanelQuery",
+                "spec": {
+                  "query": {
+                    "kind": "DataQuery",
+                    "group": "prometheus",
+                    "version": "v0",
+                    "spec": {
+                      "editorMode": "code",
+                      "exemplar": true,
+                      "expr": "{__name__=~\"sglang[:_]cache_hit_rate\", model_name=~\"$sglang_model_name\", replica=~\"$sglang_replica\"}",
+                      "interval": "",
+                      "legendFormat": "replica {{replica}}",
+                      "queryType": "randomWalk",
+                      "range": true
+                    }
+                  },
+                  "refId": "A",
+                  "hidden": false
+                }
+              }
+            ],
+            "transformations": [],
+            "queryOptions": {}
+          }
+        },
+        "vizConfig": {
+          "kind": "VizConfig",
+          "group": "timeseries",
+          "version": "13.0.2",
+          "spec": {
+            "options": {
+              "alertThreshold": true,
+              "annotations": {
+                "clustering": -1,
+                "multiLane": false
+              },
+              "legend": {
+                "calcs": [
+                  "lastNotNull"
+                ],
+                "displayMode": "table",
+                "placement": "bottom",
+                "showLegend": true
+              },
+              "tooltip": {
+                "hideZeros": false,
+                "mode": "multi",
+                "sort": "none"
+              }
+            },
+            "fieldConfig": {
+              "defaults": {
+                "unit": "percentunit",
+                "min": 0,
+                "thresholds": {
+                  "mode": "absolute",
+                  "steps": [
+                    {
+                      "value": 0,
+                      "color": "green"
+                    },
+                    {
+                      "value": 80,
+                      "color": "red"
+                    }
+                  ]
+                },
+                "color": {
+                  "mode": "palette-classic"
+                },
+                "custom": {
+                  "axisBorderShow": false,
+                  "axisCenteredZero": false,
+                  "axisColorMode": "text",
+                  "axisLabel": "",
+                  "axisPlacement": "auto",
+                  "barAlignment": 0,
+                  "barWidthFactor": 0.6,
+                  "drawStyle": "line",
+                  "fillOpacity": 10,
+                  "gradientMode": "none",
+                  "hideFrom": {
+                    "legend": false,
+                    "tooltip": false,
+                    "viz": false
+                  },
+                  "insertNulls": false,
+                  "lineInterpolation": "linear",
+                  "lineWidth": 2,
+                  "pointSize": 5,
+                  "scaleDistribution": {
+                    "type": "linear"
+                  },
+                  "showPoints": "never",
+                  "showValues": false,
+                  "spanNulls": false,
+                  "stacking": {
+                    "group": "A",
+                    "mode": "none"
+                  },
+                  "thresholdsStyle": {
+                    "mode": "off"
+                  }
+                }
+              },
+              "overrides": [
+                {
+                  "matcher": {
+                    "id": "byName",
+                    "options": "MAX"
+                  },
+                  "properties": [
+                    {
+                      "id": "color",
+                      "value": {
+                        "fixedColor": "#1F60C4",
+                        "mode": "fixed"
+                      }
+                    },
+                    {
+                      "id": "custom.fillOpacity",
+                      "value": 0
+                    },
+                    {
+                      "id": "custom.stacking",
+                      "value": {
+                        "group": "A",
+                        "mode": "none"
+                      }
+                    },
+                    {
+                      "id": "custom.lineStyle",
+                      "value": {
+                        "dash": [
+                          10,
+                          10
+                        ],
+                        "fill": "dash"
+                      }
+                    }
+                  ]
+                },
+                {
+                  "matcher": {
+                    "id": "byName",
+                    "options": "MAX + PENDING"
+                  },
+                  "properties": [
+                    {
+                      "id": "color",
+                      "value": {
+                        "fixedColor": "#777777",
+                        "mode": "fixed"
+                      }
+                    },
+                    {
+                      "id": "custom.fillOpacity",
+                      "value": 0
+                    },
+                    {
+                      "id": "custom.stacking",
+                      "value": {
+                        "group": "A",
+                        "mode": "none"
+                      }
+                    },
+                    {
+                      "id": "custom.lineStyle",
+                      "value": {
+                        "dash": [
+                          10,
+                          10
+                        ],
+                        "fill": "dash"
+                      }
+                    }
+                  ]
+                },
+                {
+                  "matcher": {
+                    "id": "byValue",
+                    "options": {
+                      "op": "gte",
+                      "reducer": "allIsZero",
+                      "value": 0
+                    }
+                  },
+                  "properties": [
+                    {
+                      "id": "custom.hideFrom",
+                      "value": {
+                        "legend": true,
+                        "tooltip": true,
+                        "viz": false
+                      }
+                    }
+                  ]
+                }
+              ]
+            }
+          }
+        }
+      }
+    },
+    "engine.sglang.metric.sglang_number_queued_requests": {
+      "kind": "Panel",
+      "spec": {
+        "id": 8,
+        "title": "SGLang: Number Queued Requests",
+        "description": "Number of queued requests in SGLang.",
+        "links": [],
+        "data": {
+          "kind": "QueryGroup",
+          "spec": {
+            "queries": [
+              {
+                "kind": "PanelQuery",
+                "spec": {
+                  "query": {
+                    "kind": "DataQuery",
+                    "group": "prometheus",
+                    "version": "v0",
+                    "spec": {
+                      "editorMode": "code",
+                      "exemplar": true,
+                      "expr": "{__name__=~\"sglang[:_]num_queue_reqs\", model_name=~\"$sglang_model_name\", replica=~\"$sglang_replica\"}",
+                      "interval": "",
+                      "legendFormat": "replica {{replica}}",
+                      "queryType": "randomWalk",
+                      "range": true
+                    }
+                  },
+                  "refId": "A",
+                  "hidden": false
+                }
+              }
+            ],
+            "transformations": [],
+            "queryOptions": {}
+          }
+        },
+        "vizConfig": {
+          "kind": "VizConfig",
+          "group": "timeseries",
+          "version": "13.0.2",
+          "spec": {
+            "options": {
+              "alertThreshold": true,
+              "annotations": {
+                "clustering": -1,
+                "multiLane": false
+              },
+              "legend": {
+                "calcs": [
+                  "lastNotNull"
+                ],
+                "displayMode": "table",
+                "placement": "bottom",
+                "showLegend": true
+              },
+              "tooltip": {
+                "hideZeros": false,
+                "mode": "multi",
+                "sort": "none"
+              }
+            },
+            "fieldConfig": {
+              "defaults": {
+                "unit": "none",
+                "min": 0,
+                "thresholds": {
+                  "mode": "absolute",
+                  "steps": [
+                    {
+                      "value": 0,
+                      "color": "green"
+                    },
+                    {
+                      "value": 80,
+                      "color": "red"
+                    }
+                  ]
+                },
+                "color": {
+                  "mode": "palette-classic"
+                },
+                "custom": {
+                  "axisBorderShow": false,
+                  "axisCenteredZero": false,
+                  "axisColorMode": "text",
+                  "axisLabel": "",
+                  "axisPlacement": "auto",
+                  "barAlignment": 0,
+                  "barWidthFactor": 0.6,
+                  "drawStyle": "line",
+                  "fillOpacity": 10,
+                  "gradientMode": "none",
+                  "hideFrom": {
+                    "legend": false,
+                    "tooltip": false,
+                    "viz": false
+                  },
+                  "insertNulls": false,
+                  "lineInterpolation": "linear",
+                  "lineWidth": 2,
+                  "pointSize": 5,
+                  "scaleDistribution": {
+                    "type": "linear"
+                  },
+                  "showPoints": "never",
+                  "showValues": false,
+                  "spanNulls": false,
+                  "stacking": {
+                    "group": "A",
+                    "mode": "none"
+                  },
+                  "thresholdsStyle": {
+                    "mode": "off"
+                  }
+                }
+              },
+              "overrides": [
+                {
+                  "matcher": {
+                    "id": "byName",
+                    "options": "MAX"
+                  },
+                  "properties": [
+                    {
+                      "id": "color",
+                      "value": {
+                        "fixedColor": "#1F60C4",
+                        "mode": "fixed"
+                      }
+                    },
+                    {
+                      "id": "custom.fillOpacity",
+                      "value": 0
+                    },
+                    {
+                      "id": "custom.stacking",
+                      "value": {
+                        "group": "A",
+                        "mode": "none"
+                      }
+                    },
+                    {
+                      "id": "custom.lineStyle",
+                      "value": {
+                        "dash": [
+                          10,
+                          10
+                        ],
+                        "fill": "dash"
+                      }
+                    }
+                  ]
+                },
+                {
+                  "matcher": {
+                    "id": "byName",
+                    "options": "MAX + PENDING"
+                  },
+                  "properties": [
+                    {
+                      "id": "color",
+                      "value": {
+                        "fixedColor": "#777777",
+                        "mode": "fixed"
+                      }
+                    },
+                    {
+                      "id": "custom.fillOpacity",
+                      "value": 0
+                    },
+                    {
+                      "id": "custom.stacking",
+                      "value": {
+                        "group": "A",
+                        "mode": "none"
+                      }
+                    },
+                    {
+                      "id": "custom.lineStyle",
+                      "value": {
+                        "dash": [
+                          10,
+                          10
+                        ],
+                        "fill": "dash"
+                      }
+                    }
+                  ]
+                },
+                {
+                  "matcher": {
+                    "id": "byValue",
+                    "options": {
+                      "op": "gte",
+                      "reducer": "allIsZero",
+                      "value": 0
+                    }
+                  },
+                  "properties": [
+                    {
+                      "id": "custom.hideFrom",
+                      "value": {
+                        "legend": true,
+                        "tooltip": true,
+                        "viz": false
+                      }
+                    }
+                  ]
+                }
+              ]
+            }
+          }
+        }
+      }
+    }
+  },
+  "row": {
+    "kind": "RowsLayoutRow",
+    "spec": {
+      "title": "sglang engine metric",
+      "collapse": true,
+      "layout": {
+        "kind": "GridLayout",
+        "spec": {
+          "items": [
+            {
+              "kind": "GridLayoutItem",
+              "spec": {
+                "x": 0,
+                "y": 0,
+                "width": 12,
+                "height": 8,
+                "element": {
+                  "kind": "ElementReference",
+                  "name": "engine.sglang.metric.sglang_end_to_end_request_latency"
+                }
+              }
+            },
+            {
+              "kind": "GridLayoutItem",
+              "spec": {
+                "x": 12,
+                "y": 0,
+                "width": 12,
+                "height": 8,
+                "element": {
+                  "kind": "ElementReference",
+                  "name": "engine.sglang.metric.sglang_end_to_end_request_latency_heatmap"
+                }
+              }
+            },
+            {
+              "kind": "GridLayoutItem",
+              "spec": {
+                "x": 0,
+                "y": 8,
+                "width": 12,
+                "height": 8,
+                "element": {
+                  "kind": "ElementReference",
+                  "name": "engine.sglang.metric.sglang_time_to_first_token_latency"
+                }
+              }
+            },
+            {
+              "kind": "GridLayoutItem",
+              "spec": {
+                "x": 12,
+                "y": 8,
+                "width": 12,
+                "height": 8,
+                "element": {
+                  "kind": "ElementReference",
+                  "name": "engine.sglang.metric.sglang_time_to_first_token_heatmap"
+                }
+              }
+            },
+            {
+              "kind": "GridLayoutItem",
+              "spec": {
+                "x": 0,
+                "y": 16,
+                "width": 12,
+                "height": 8,
+                "element": {
+                  "kind": "ElementReference",
+                  "name": "engine.sglang.metric.sglang_num_running_requests"
+                }
+              }
+            },
+            {
+              "kind": "GridLayoutItem",
+              "spec": {
+                "x": 12,
+                "y": 16,
+                "width": 12,
+                "height": 8,
+                "element": {
+                  "kind": "ElementReference",
+                  "name": "engine.sglang.metric.sglang_token_generation_throughput"
+                }
+              }
+            },
+            {
+              "kind": "GridLayoutItem",
+              "spec": {
+                "x": 0,
+                "y": 24,
+                "width": 12,
+                "height": 8,
+                "element": {
+                  "kind": "ElementReference",
+                  "name": "engine.sglang.metric.sglang_cache_hit_rate"
+                }
+              }
+            },
+            {
+              "kind": "GridLayoutItem",
+              "spec": {
+                "x": 12,
+                "y": 24,
+                "width": 12,
+                "height": 8,
+                "element": {
+                  "kind": "ElementReference",
+                  "name": "engine.sglang.metric.sglang_number_queued_requests"
+                }
+              }
+            }
+          ]
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,297 @@
+{
+  "elements": {
+    "trajectory.metric.state_timeline": {
+      "kind": "Panel",
+      "spec": {
+        "id": 40,
+        "title": "state timeline",
+        "description": "",
+        "links": [],
+        "data": {
+          "kind": "QueryGroup",
+          "spec": {
+            "queries": [
+              {
+                "kind": "PanelQuery",
+                "spec": {
+                  "query": {
+                    "kind": "DataQuery",
+                    "group": "tempo",
+                    "version": "v0",
+                    "spec": {
+                      "limit": 10000,
+                      "metricsQueryType": "range",
+                      "query": "{span.state_lane_id!=\"\"}",
+                      "queryType": "traceql",
+                      "serviceMapUseNativeHistograms": false,
+                      "spss": 100,
+                      "tableType": "spans"
+                    }
+                  },
+                  "refId": "A",
+                  "hidden": false
+                }
+              }
+            ],
+            "transformations": [
+              {
+                "kind": "Transformation",
+                "group": "calculateField",
+                "spec": {
+                  "options": {
+                    "binary": {
+                      "left": {
+                        "matcher": {
+                          "id": "byName",
+                          "options": "Duration"
+                        }
+                      },
+                      "operator": "/",
+                      "right": {
+                        "fixed": "1000000"
+                      }
+                    },
+                    "mode": "binary",
+                    "reduce": {
+                      "reducer": "sum"
+                    }
+                  }
+                }
+              },
+              {
+                "kind": "Transformation",
+                "group": "calculateField",
+                "spec": {
+                  "options": {
+                    "alias": "End time",
+                    "mode": "reduceRow",
+                    "reduce": {
+                      "include": [
+                        "Start time",
+                        "Duration / 1000000"
+                      ],
+                      "reducer": "sum"
+                    }
+                  }
+                }
+              },
+              {
+                "kind": "Transformation",
+                "group": "extractFields",
+                "spec": {
+                  "options": {
+                    "source": "state_lane_id",
+                    "format": "regexp",
+                    "replace": false,
+                    "regExp": "/^(?<state_lane_prefix>.+?)(?:[_-](?<state_lane_num>\\d+))?$/"
+                  }
+                }
+              },
+              {
+                "kind": "Transformation",
+                "group": "convertFieldType",
+                "spec": {
+                  "options": {
+                    "conversions": [
+                      {
+                        "destinationType": "time",
+                        "targetField": "Start time"
+                      },
+                      {
+                        "destinationType": "time",
+                        "targetField": "End time"
+                      },
+                      {
+                        "destinationType": "number",
+                        "targetField": "state_lane_num"
+                      }
+                    ],
+                    "fields": {}
+                  }
+                }
+              },
+              {
+                "kind": "Transformation",
+                "group": "sortBy",
+                "spec": {
+                  "options": {
+                    "fields": {},
+                    "sort": [
+                      {
+                        "field": "state_lane_num"
+                      }
+                    ]
+                  }
+                }
+              },
+              {
+                "kind": "Transformation",
+                "group": "sortBy",
+                "spec": {
+                  "options": {
+                    "fields": {},
+                    "sort": [
+                      {
+                        "field": "state_lane_prefix"
+                      }
+                    ]
+                  }
+                }
+              },
+              {
+                "kind": "Transformation",
+                "group": "organize",
+                "spec": {
+                  "options": {
+                    "excludeByName": {
+                      "Duration": true,
+                      "Duration / 1000000": true,
+                      "Name": true,
+                      "Span ID": true,
+                      "Trace Service": true,
+                      "traceIdHidden": true,
+                      "state_lane_prefix": true,
+                      "state_lane_num": true
+                    },
+                    "includeByName": {},
+                    "indexByName": {},
+                    "renameByName": {}
+                  }
+                }
+              },
+              {
+                "kind": "Transformation",
+                "group": "partitionByValues",
+                "spec": {
+                  "options": {
+                    "fields": [
+                      "state_lane_id"
+                    ],
+                    "keepFields": false
+                  }
+                }
+              }
+            ],
+            "queryOptions": {}
+          }
+        },
+        "vizConfig": {
+          "kind": "VizConfig",
+          "group": "state-timeline",
+          "version": "13.0.2",
+          "spec": {
+            "options": {
+              "alignValue": "left",
+              "annotations": {
+                "clustering": -1,
+                "multiLane": false
+              },
+              "legend": {
+                "displayMode": "list",
+                "placement": "bottom",
+                "showLegend": true
+              },
+              "mergeValues": true,
+              "perPage": 64,
+              "rowHeight": 0.9,
+              "showValue": "auto",
+              "tooltip": {
+                "hideZeros": false,
+                "mode": "single",
+                "sort": "none"
+              }
+            },
+            "fieldConfig": {
+              "defaults": {
+                "mappings": [
+                  {
+                    "type": "regex",
+                    "options": {
+                      "pattern": ".*compute_log_prob.*",
+                      "result": {
+                        "color": "yellow",
+                        "index": 0
+                      }
+                    }
+                  },
+                  {
+                    "type": "regex",
+                    "options": {
+                      "pattern": ".*generate.*",
+                      "result": {
+                        "color": "blue",
+                        "index": 1
+                      }
+                    }
+                  },
+                  {
+                    "type": "regex",
+                    "options": {
+                      "pattern": ".*compute_ref_log_prob.*",
+                      "result": {
+                        "color": "purple",
+                        "index": 2
+                      }
+                    }
+                  }
+                ],
+                "thresholds": {
+                  "mode": "absolute",
+                  "steps": [
+                    {
+                      "value": 0,
+                      "color": "green"
+                    }
+                  ]
+                },
+                "color": {
+                  "mode": "thresholds"
+                },
+                "custom": {
+                  "axisPlacement": "auto",
+                  "fillOpacity": 70,
+                  "hideFrom": {
+                    "legend": false,
+                    "tooltip": false,
+                    "viz": false
+                  },
+                  "insertNulls": false,
+                  "lineWidth": 0,
+                  "spanNulls": false
+                }
+              },
+              "overrides": []
+            }
+          }
+        }
+      }
+    }
+  },
+  "row": {
+    "kind": "RowsLayoutRow",
+    "spec": {
+      "title": "rl state timeline",
+      "collapse": true,
+      "layout": {
+        "kind": "GridLayout",
+        "spec": {
+          "items": [
+            {
+              "kind": "GridLayoutItem",
+              "spec": {
+                "x": 0,
+                "y": 0,
+                "width": 24,
+                "height": 18,
+                "element": {
+                  "kind": "ElementReference",
+                  "name": "trajectory.metric.state_timeline"
+                }
+              }
+            }
+          ]
+        }
+      }
+    }
+  }
+}
