@@ -164,9 +164,7 @@ def _resolve_interactively(
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument(
-        "--vllm-dashboard", type=Path, default=DEFAULT_VLLM_DASHBOARD
-    )
+    parser.add_argument("--vllm-dashboard", type=Path, default=DEFAULT_VLLM_DASHBOARD)
     parser.add_argument(
         "--sglang-dashboard", type=Path, default=DEFAULT_SGLANG_DASHBOARD
     )
