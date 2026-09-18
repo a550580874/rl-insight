@@ -44,10 +44,14 @@ def render(config: Path) -> dict[str, Any]:
     try:
         rendered = _gojsonnet.evaluate_file(str(config))
     except RuntimeError as error:
-        raise RuntimeError(f"Jsonnet evaluation failed for {config}: {error}") from error
+        raise RuntimeError(
+            f"Jsonnet evaluation failed for {config}: {error}"
+        ) from error
     dashboards = json.loads(rendered)
     if not isinstance(dashboards, dict) or not dashboards:
-        raise RuntimeError(f"{config} must evaluate to a non-empty object of dashboards")
+        raise RuntimeError(
+            f"{config} must evaluate to a non-empty object of dashboards"
+        )
     return dashboards
 
 
@@ -58,7 +62,9 @@ def generated_text(dashboard: Any) -> str:
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--config", type=Path, required=True, help="composition config (.jsonnet)")
+    parser.add_argument(
+        "--config", type=Path, required=True, help="composition config (.jsonnet)"
+    )
     parser.add_argument(
         "--out-dir",
         type=Path,
@@ -88,15 +94,21 @@ def main() -> int:
 
     if args.check:
         if expected_dir is None:
-            print("error: --check requires --expected-dir (or --out-dir)", file=sys.stderr)
+            print(
+                "error: --check requires --expected-dir (or --out-dir)", file=sys.stderr
+            )
             return 2
         stale: list[Path] = []
         for name, dashboard in dashboards.items():
             path = expected_dir / f"{name}.json"
-            if not path.exists() or path.read_text(encoding="utf-8") != generated_text(dashboard):
+            if not path.exists() or path.read_text(encoding="utf-8") != generated_text(
+                dashboard
+            ):
                 stale.append(path)
         if stale:
-            print("Generated dashboards do not match the expected files:", file=sys.stderr)
+            print(
+                "Generated dashboards do not match the expected files:", file=sys.stderr
+            )
             for path in stale:
                 print(f"  {path}", file=sys.stderr)
             return 1
