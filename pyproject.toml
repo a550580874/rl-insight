@@ -36,6 +36,7 @@ recipe = [
 ]
 test = [
   "pytest",
+  "gojsonnet>=0.22.0",
 ]
 
 [project.scripts]
