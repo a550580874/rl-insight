@@ -14,10 +14,9 @@
 
 """Tests for the generic Grafana dashboard composition framework.
 
-The framework lives under ``tools/grafana/framework`` and is independent of any
-production dashboard.  These tests render the A/B/C/D example modules and
-exercise the composer's explicit merge/conflict rules through the generator
-CLI, the same entrypoint CI would use.
+The framework lives under ``tools/grafana/framework`` and is independent of
+any production dashboard or committed fixture: every test renders a minimal
+composition config that the test writes into ``tmp_path``.
 """
 
 from __future__ import annotations
@@ -27,10 +26,11 @@ import subprocess
 import sys
 from pathlib import Path
 
+import pytest
+
 REPO_ROOT = Path(__file__).resolve().parents[3]
 FRAMEWORK = REPO_ROOT / "tools" / "grafana" / "framework"
 GENERATE = FRAMEWORK / "generate.py"
-EXAMPLES = FRAMEWORK / "examples"
 COMPOSER = FRAMEWORK / "composer.libsonnet"
 
 
@@ -45,10 +45,6 @@ def run_generate(*args: str, expect: int = 0) -> subprocess.CompletedProcess[str
     return proc
 
 
-def config_path(name: str) -> Path:
-    return EXAMPLES / "dashboards" / f"{name}.jsonnet"
-
-
 def write_config(tmp_path: Path, body: str) -> Path:
     tmp_path.mkdir(parents=True, exist_ok=True)
     path = tmp_path / "compose.jsonnet"
@@ -56,9 +52,8 @@ def write_config(tmp_path: Path, body: str) -> Path:
     return path
 
 
-def inline_module(prefix: str, panel_id: int, tags: list[str] | None = None) -> str:
-    # JSON is a Jsonnet subset, so the toy modules are built as Python data and
-    # dumped - no hand-written nesting to get wrong.
+def module_source(prefix: str, panel_id: int, tags: list[str] | None = None) -> str:
+    """A minimal toy module as Jsonnet source (JSON is a Jsonnet subset)."""
     module: dict = {
         "panels": [
             {
@@ -116,16 +111,22 @@ def inline_module(prefix: str, panel_id: int, tags: list[str] | None = None) -> 
 
 
 def compose_config(
-    tmp_path: Path, modules: list[tuple[str, int, list[str] | None]], dashboard: str
+    tmp_path: Path,
+    modules: list[tuple[str, int, list[str] | None]],
+    dashboard: str,
+    replacements: list[tuple[str, str]] | None = None,
 ) -> Path:
-    body = "".join(
-        inline_module(prefix, panel_id, tags) for prefix, panel_id, tags in modules
-    )
-    module_names = [prefix for prefix, _, _ in modules]
+    """Write a config composing the given toy modules into ``tmp_path``."""
+    body = ""
+    for prefix, panel_id, tags in modules:
+        source = module_source(prefix, panel_id, tags)
+        for old, new in replacements or []:
+            source = source.replace(old, new)
+        body += source
     body += (
         "local composer = import '" + str(COMPOSER) + "';\n"
         "{ compose: composer.compose(["
-        + ", ".join(module_names)
+        + ", ".join(prefix for prefix, _, _ in modules)
         + "], "
         + dashboard
         + ") }\n"
@@ -133,170 +134,119 @@ def compose_config(
     return write_config(tmp_path, body)
 
 
+def render(tmp_path: Path, config: Path, out: str) -> dict:
+    run_generate("--config", str(config), "--out-dir", str(tmp_path / out))
+    path = tmp_path / out / "compose.json"
+    return json.loads(path.read_text(encoding="utf-8"))
+
+
 DASHBOARD = (
     "{ metadata: { name: 'toy', uid: 'toy' }, title: 'Toy dashboard', "
     "tags: ['example'], spec: {}, variableOrder: %s, rowOrder: %s }"
 )
+TWO_MODULES: list[tuple[str, int, list[str] | None]] = [
+    ("m1", 1, None),
+    ("m2", 2, None),
+]
+FULL_DASHBOARD = DASHBOARD % ("['zone_m1']", "['m1-row', 'm2-row']")
 
 
-def test_example_dashboards_render_deterministically(tmp_path: Path) -> None:
-    for name in ("ab", "acd"):
-        first = tmp_path / f"{name}-1"
-        second = tmp_path / f"{name}-2"
-        run_generate("--config", str(config_path(name)), "--out-dir", str(first))
-        run_generate("--config", str(config_path(name)), "--out-dir", str(second))
-        rendered = (first / f"{name}.json").read_text(encoding="utf-8")
-        assert rendered == (second / f"{name}.json").read_text(encoding="utf-8")
-        assert rendered == (EXAMPLES / "expected" / f"{name}.json").read_text(
-            encoding="utf-8"
-        )
-
-
-def test_example_dashboard_composes_modules_with_resolved_references() -> None:
-    spec = json.loads((EXAMPLES / "expected" / "ab.json").read_text(encoding="utf-8"))[
-        "spec"
-    ]
-    # Module order (A then B) and the composition config decide layout.
-    assert [row["spec"]["title"] for row in spec["layout"]["spec"]["rows"]] == [
-        "A overview",
-        "A details",
-        "B row",
-    ]
-    # Layout rows may reference panels from *other* modules by `key`; the
-    # composer resolves them to the panel's `outputKey` when rendering.
-    b_row = spec["layout"]["spec"]["rows"][2]
-    referenced = [
-        item["spec"]["element"]["name"]
-        for item in b_row["spec"]["layout"]["spec"]["items"]
-    ]
-    assert "a-request-rate" in referenced
-    assert referenced[0] == "b-saturation"
-    # Same module A, different companions: the A+C+D dashboard reuses A's
-    # panels and rows unchanged.
-    acd = json.loads((EXAMPLES / "expected" / "acd.json").read_text(encoding="utf-8"))[
-        "spec"
-    ]
-    assert [row["spec"]["title"] for row in acd["layout"]["spec"]["rows"]] == [
-        "A overview",
-        "C row",
-        "A details",
-        "D row",
+def test_render_is_byte_deterministic(tmp_path: Path) -> None:
+    config = compose_config(tmp_path, TWO_MODULES, FULL_DASHBOARD)
+    command = ["--config", str(config)]
+    run_generate(*command, "--out-dir", str(tmp_path / "run1"))
+    run_generate(*command, "--out-dir", str(tmp_path / "run2"))
+    first = (tmp_path / "run1" / "compose.json").read_bytes()
+    assert first == (tmp_path / "run2" / "compose.json").read_bytes()
+    composed = json.loads(first)["spec"]
+    assert [row["spec"]["title"] for row in composed["layout"]["spec"]["rows"]] == [
+        "m1 row",
+        "m2 row",
     ]
 
 
-def test_check_mode_passes_for_the_committed_examples() -> None:
-    for name in ("ab", "acd"):
-        run_generate(
-            "--config",
-            str(config_path(name)),
-            "--check",
-            "--expected-dir",
-            str(EXAMPLES / "expected"),
-        )
+def test_check_mode_passes_when_in_sync(tmp_path: Path) -> None:
+    config = compose_config(tmp_path, TWO_MODULES, FULL_DASHBOARD)
+    run_generate("--config", str(config), "--out-dir", str(tmp_path / "expected"))
+    run_generate(
+        "--config",
+        str(config),
+        "--check",
+        "--expected-dir",
+        str(tmp_path / "expected"),
+    )
 
 
 def test_check_mode_detects_stale_expected_output(tmp_path: Path) -> None:
-    stale_dir = tmp_path / "expected"
-    stale_dir.mkdir()
-    stale = json.loads((EXAMPLES / "expected" / "ab.json").read_text(encoding="utf-8"))
+    config = compose_config(tmp_path, TWO_MODULES, FULL_DASHBOARD)
+    expected_dir = tmp_path / "expected"
+    run_generate("--config", str(config), "--out-dir", str(expected_dir))
+    stale = json.loads((expected_dir / "compose.json").read_text(encoding="utf-8"))
     stale["spec"]["title"] = "tampered"
-    (stale_dir / "ab.json").write_text(
+    (expected_dir / "compose.json").write_text(
         json.dumps(stale, ensure_ascii=False, indent=2) + "\n", encoding="utf-8"
     )
     proc = run_generate(
         "--config",
-        str(config_path("ab")),
+        str(config),
         "--check",
         "--expected-dir",
-        str(stale_dir),
+        str(expected_dir),
         expect=1,
     )
-    assert "ab.json" in proc.stderr
+    assert "compose.json" in proc.stderr
 
 
-def test_duplicate_panel_key_is_rejected(tmp_path: Path) -> None:
-    config = compose_config(
-        tmp_path,
-        [("m1", 1, None), ("m1", 1, None)],
-        DASHBOARD % ("['zone_m1']", "['m1-row']"),
-    )
-    proc = run_generate(
-        "--config", str(config), "--out-dir", str(tmp_path / "out"), expect=2
-    )
-    assert "duplicate panel key(s)" in proc.stderr
-
-
-def test_duplicate_panel_id_is_rejected(tmp_path: Path) -> None:
-    config = compose_config(
-        tmp_path,
-        [("m1", 1, None), ("m2", 1, None)],
-        DASHBOARD % ("['zone_m1']", "['m1-row']"),
-    )
-    proc = run_generate(
-        "--config", str(config), "--out-dir", str(tmp_path / "out"), expect=2
-    )
-    assert "duplicate panel id(s)" in proc.stderr
-
-
-def test_duplicate_row_name_is_rejected(tmp_path: Path) -> None:
+def test_layout_references_resolve_across_modules(tmp_path: Path) -> None:
+    # The second module's layout row references the first module's panel by
+    # `key`; the composer rewrites it to the panel's `outputKey` when rendering.
+    m2 = module_source("m2", 2).replace('"name": "m2.panel"', '"name": "m1.panel"')
     body = (
-        inline_module("m1", 1, None).replace("m1-row", "shared-row")
-        + inline_module("m2", 2, None).replace("m2-row", "shared-row")
-        + "local composer = import '"
-        + str(COMPOSER)
-        + "';\n"
-        + "composer.compose([m1, m2], "
-        + DASHBOARD % ("['zone_m1']", "['shared-row']")
-        + ")\n"
-    )
-    config = write_config(tmp_path, body)
-    proc = run_generate(
-        "--config", str(config), "--out-dir", str(tmp_path / "out"), expect=2
-    )
-    assert "duplicate row name(s)" in proc.stderr
-
-
-def test_duplicate_panel_output_key_is_rejected(tmp_path: Path) -> None:
-    body = (
-        inline_module("m1", 1, None)
-        + inline_module("m2", 2, None).replace("m2-panel", "m1-panel")
+        module_source("m1", 1)
+        + m2
         + "local composer = import '"
         + str(COMPOSER)
         + "';\n"
         + "{ compose: composer.compose([m1, m2], "
-        + DASHBOARD % ("['zone_m1']", "['m1-row']")
+        + FULL_DASHBOARD
         + ") }\n"
     )
     config = write_config(tmp_path, body)
+    composed = render(tmp_path, config, "out")["spec"]
+    assert set(composed["elements"]) == {"m1-panel", "m2-panel"}
+    second_row = composed["layout"]["spec"]["rows"][1]
+    referenced = second_row["spec"]["layout"]["spec"]["items"][0]["spec"]["element"]
+    assert referenced == {"kind": "ElementReference", "name": "m1-panel"}
+
+
+CONFLICT_CASES = [
+    ("duplicate panel key(s)", [('"key": "m2.panel"', '"key": "m1.panel"')]),
+    ("duplicate panel outputKey(s)", [("m2-panel", "m1-panel")]),
+    ("duplicate panel id(s)", [('"id": 2', '"id": 1')]),
+    ("duplicate row name(s)", [("m2-row", "m1-row")]),
+    ("duplicate variable name(s)", [("zone_m2", "zone_m1")]),
+]
+
+
+@pytest.mark.parametrize(("expected_error", "replacements"), CONFLICT_CASES)
+def test_composition_conflicts_are_rejected(
+    tmp_path: Path, expected_error: str, replacements: list[tuple[str, str]] | None
+) -> None:
+    config = compose_config(
+        tmp_path,
+        TWO_MODULES,
+        DASHBOARD % ("['zone_m1']", "['m1-row']"),
+        replacements=replacements,
+    )
     proc = run_generate(
         "--config", str(config), "--out-dir", str(tmp_path / "out"), expect=2
     )
-    assert "duplicate panel outputKey(s)" in proc.stderr
-
-
-def test_duplicate_variable_name_is_rejected(tmp_path: Path) -> None:
-    body = (
-        inline_module("m1", 1, None)
-        + inline_module("m2", 2, None).replace("zone_m2", "zone_m1")
-        + "local composer = import '"
-        + str(COMPOSER)
-        + "';\n"
-        + "{ compose: composer.compose([m1, m2], "
-        + DASHBOARD % ("['zone_m1']", "['m1-row']")
-        + ") }\n"
-    )
-    config = write_config(tmp_path, body)
-    proc = run_generate(
-        "--config", str(config), "--out-dir", str(tmp_path / "out"), expect=2
-    )
-    assert "duplicate variable name(s)" in proc.stderr
+    assert expected_error in proc.stderr
 
 
 def test_unknown_variable_in_variable_order_is_rejected(tmp_path: Path) -> None:
     config = compose_config(
-        tmp_path,
-        [("m1", 1, None), ("m2", 2, None)],
-        DASHBOARD % ("['zone_m1', 'missing_var']", "['m1-row']"),
+        tmp_path, TWO_MODULES, DASHBOARD % ("['zone_m1', 'missing_var']", "['m1-row']")
     )
     proc = run_generate(
         "--config", str(config), "--out-dir", str(tmp_path / "out"), expect=2
@@ -306,9 +256,7 @@ def test_unknown_variable_in_variable_order_is_rejected(tmp_path: Path) -> None:
 
 def test_unknown_row_in_row_order_is_rejected(tmp_path: Path) -> None:
     config = compose_config(
-        tmp_path,
-        [("m1", 1, None), ("m2", 2, None)],
-        DASHBOARD % ("['zone_m1']", "['m1-row', 'missing_row']"),
+        tmp_path, TWO_MODULES, DASHBOARD % ("['zone_m1']", "['m1-row', 'missing_row']")
     )
     proc = run_generate(
         "--config", str(config), "--out-dir", str(tmp_path / "out"), expect=2
@@ -317,56 +265,40 @@ def test_unknown_row_in_row_order_is_rejected(tmp_path: Path) -> None:
 
 
 def test_composition_order_decides_tag_sequence(tmp_path: Path) -> None:
-    forward = compose_config(
-        tmp_path / "forward",
-        [("m1", 1, ["one"]), ("m2", 2, ["two"])],
-        DASHBOARD % ("['zone_m1']", "['m1-row']"),
-    )
-    reversed_config = compose_config(
-        tmp_path / "reversed",
-        [("m2", 2, ["two"]), ("m1", 1, ["one"])],
-        DASHBOARD % ("['zone_m1']", "['m1-row']"),
-    )
-    out_forward = tmp_path / "out-forward"
-    out_reversed = tmp_path / "out-reversed"
-    run_generate("--config", str(forward), "--out-dir", str(out_forward))
-    run_generate("--config", str(reversed_config), "--out-dir", str(out_reversed))
-    tags_forward = json.loads(
-        (out_forward / "compose.json").read_text(encoding="utf-8")
+    forward = render(
+        tmp_path,
+        compose_config(
+            tmp_path / "src-f",
+            [("m1", 1, ["one"]), ("m2", 2, ["two"])],
+            DASHBOARD % ("['zone_m1']", "['m1-row']"),
+        ),
+        "out-f",
     )["spec"]["tags"]
-    tags_reversed = json.loads(
-        (out_reversed / "compose.json").read_text(encoding="utf-8")
+    reversed_tags = render(
+        tmp_path,
+        compose_config(
+            tmp_path / "src-r",
+            [("m2", 2, ["two"]), ("m1", 1, ["one"])],
+            DASHBOARD % ("['zone_m1']", "['m1-row']"),
+        ),
+        "out-r",
     )["spec"]["tags"]
-    assert tags_forward == ["example", "one", "two"]
-    assert tags_reversed == ["example", "two", "one"]
+    assert forward == ["example", "one", "two"]
+    assert reversed_tags == ["example", "two", "one"]
 
 
 def test_variable_order_follows_the_composition_config(tmp_path: Path) -> None:
-    forward = compose_config(
-        tmp_path / "forward",
-        [("m1", 1, None), ("m2", 2, None)],
-        DASHBOARD % ("['zone_m1', 'zone_m2']", "['m1-row']"),
-    )
-    reversed_config = compose_config(
-        tmp_path / "reversed",
-        [("m1", 1, None), ("m2", 2, None)],
-        DASHBOARD % ("['zone_m2', 'zone_m1']", "['m1-row']"),
-    )
-    out_forward = tmp_path / "out-forward"
-    out_reversed = tmp_path / "out-reversed"
-    run_generate("--config", str(forward), "--out-dir", str(out_forward))
-    run_generate("--config", str(reversed_config), "--out-dir", str(out_reversed))
-    names_forward = [
-        variable["spec"]["name"]
-        for variable in json.loads(
-            (out_forward / "compose.json").read_text(encoding="utf-8")
-        )["spec"]["variables"]
-    ]
-    names_reversed = [
-        variable["spec"]["name"]
-        for variable in json.loads(
-            (out_reversed / "compose.json").read_text(encoding="utf-8")
-        )["spec"]["variables"]
-    ]
-    assert names_forward == ["zone_m1", "zone_m2"]
-    assert names_reversed == ["zone_m2", "zone_m1"]
+    def variable_names(variable_order: str, out: str) -> list[str]:
+        composed = render(
+            tmp_path,
+            compose_config(
+                tmp_path / f"src-{out}",
+                TWO_MODULES,
+                DASHBOARD % (variable_order, "['m1-row']"),
+            ),
+            f"out-{out}",
+        )["spec"]
+        return [variable["spec"]["name"] for variable in composed["variables"]]
+
+    assert variable_names("['zone_m1', 'zone_m2']", "fwd") == ["zone_m1", "zone_m2"]
+    assert variable_names("['zone_m2', 'zone_m1']", "rev") == ["zone_m2", "zone_m1"]

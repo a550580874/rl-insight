@@ -14,11 +14,12 @@
 
 """Deterministically render Grafana dashboard JSON from a composition config.
 
-The config is a Jsonnet file that evaluates to
-``{ "<dashboard-name>": <dashboard resource> }`` (see
-``examples/dashboards/*.jsonnet``). Rendering is deterministic: go-jsonnet
-emits object fields in sorted order, and the writer uses a fixed indentation,
-so two runs over the same sources always produce byte-identical files.
+A composition config is a Jsonnet file that imports the generic composer and
+evaluates to ``{ "<dashboard-name>": <dashboard resource> }``, where each
+dashboard resource is the object returned by ``composer.compose(modules,
+dashboard)`` for that dashboard. Rendering is deterministic: go-jsonnet emits
+object fields in sorted order, and the writer uses a fixed indentation, so two
+runs over the same sources always produce byte-identical files.
 """
 
 from __future__ import annotations
