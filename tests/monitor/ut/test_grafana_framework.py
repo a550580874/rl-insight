@@ -256,6 +256,42 @@ def test_duplicate_row_name_is_rejected(tmp_path: Path) -> None:
     assert "duplicate row name(s)" in proc.stderr
 
 
+def test_duplicate_panel_output_key_is_rejected(tmp_path: Path) -> None:
+    body = (
+        inline_module("m1", 1, None)
+        + inline_module("m2", 2, None).replace("m2-panel", "m1-panel")
+        + "local composer = import '"
+        + str(COMPOSER)
+        + "';\n"
+        + "{ compose: composer.compose([m1, m2], "
+        + DASHBOARD % ("['zone_m1']", "['m1-row']")
+        + ") }\n"
+    )
+    config = write_config(tmp_path, body)
+    proc = run_generate(
+        "--config", str(config), "--out-dir", str(tmp_path / "out"), expect=2
+    )
+    assert "duplicate panel outputKey(s)" in proc.stderr
+
+
+def test_duplicate_variable_name_is_rejected(tmp_path: Path) -> None:
+    body = (
+        inline_module("m1", 1, None)
+        + inline_module("m2", 2, None).replace("zone_m2", "zone_m1")
+        + "local composer = import '"
+        + str(COMPOSER)
+        + "';\n"
+        + "{ compose: composer.compose([m1, m2], "
+        + DASHBOARD % ("['zone_m1']", "['m1-row']")
+        + ") }\n"
+    )
+    config = write_config(tmp_path, body)
+    proc = run_generate(
+        "--config", str(config), "--out-dir", str(tmp_path / "out"), expect=2
+    )
+    assert "duplicate variable name(s)" in proc.stderr
+
+
 def test_unknown_variable_in_variable_order_is_rejected(tmp_path: Path) -> None:
     config = compose_config(
         tmp_path,
