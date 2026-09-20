@@ -124,7 +124,7 @@ def compose_config(
             source = source.replace(old, new)
         body += source
     body += (
-        "local composer = import '" + str(COMPOSER) + "';\n"
+        "local composer = import '" + COMPOSER.as_posix() + "';\n"
         "{ compose: composer.compose(["
         + ", ".join(prefix for prefix, _, _ in modules)
         + "], "
@@ -240,7 +240,7 @@ def test_layout_references_resolve_across_modules(tmp_path: Path) -> None:
         module_source("m1", 1)
         + m2
         + "local composer = import '"
-        + str(COMPOSER)
+        + COMPOSER.as_posix()
         + "';\n"
         + "{ compose: composer.compose([m1, m2], "
         + FULL_DASHBOARD
@@ -359,7 +359,7 @@ def test_row_items_single_extension_appends_and_resolves(tmp_path: Path) -> None
         module_source("m1", 1)
         + extension_module_source("m1x", 11, "m1-row", "m1x.panel")
         + "local composer = import '"
-        + str(COMPOSER)
+        + COMPOSER.as_posix()
         + "';\n"
         + "{ compose: composer.compose([m1, m1x], "
         + DASHBOARD % ("['zone_m1']", "['m1-row']")
@@ -380,7 +380,7 @@ def test_row_items_append_in_composition_order(tmp_path: Path) -> None:
             + extension_module_source("e1", 11, "m1-row", "e1.panel")
             + extension_module_source("e2", 12, "m1-row", "e2.panel")
             + "local composer = import '"
-            + str(COMPOSER)
+            + COMPOSER.as_posix()
             + "';\n"
             + "{ compose: composer.compose(["
             + ", ".join(module_order)
@@ -408,7 +408,7 @@ def test_row_items_unknown_target_is_rejected(tmp_path: Path) -> None:
         module_source("m1", 1)
         + extension_module_source("e1", 11, "missing-row", "m1.panel")
         + "local composer = import '"
-        + str(COMPOSER)
+        + COMPOSER.as_posix()
         + "';\n"
         + "{ compose: composer.compose([m1, e1], "
         + DASHBOARD % ("['zone_m1']", "['m1-row']")
@@ -428,7 +428,7 @@ def test_row_items_unsupported_target_is_rejected(tmp_path: Path) -> None:
         module_source("m1", 1).replace('"kind": "GridLayout"', '"kind": "RowsLayout"')
         + extension_module_source("e1", 11, "m1-row", "e1.panel")
         + "local composer = import '"
-        + str(COMPOSER)
+        + COMPOSER.as_posix()
         + "';\n"
         + "{ compose: composer.compose([m1, e1], "
         + DASHBOARD % ("['zone_m1']", "['m1-row']")
