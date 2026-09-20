@@ -1,6 +1,6 @@
 # Server Installation
 
-RL-Insight Monitor needs three Linux services before online monitoring can run:
+RL-Insight Monitor needs three services before online monitoring can run:
 
 | Service | Role | Required version | Installer version |
 |---|---|---|---|
@@ -10,16 +10,15 @@ RL-Insight Monitor needs three Linux services before online monitoring can run:
 
 Choose one of the three approaches below depending on your network environment.
 
-## Supported Linux Platforms
+## Supported Platforms
 
-Automatic and manual installation are Linux-only.
+Automatic installation supports Linux and Windows x64.
 
 | OS family | CPU architectures |
 |---|---|
 | Ubuntu / Debian | `amd64` / `x86_64`, `arm64` / `aarch64` |
 | CentOS / RHEL / Rocky / Alma | `amd64` / `x86_64`, `arm64` / `aarch64` |
-
-Windows and macOS can run the training-side Python APIs, but RL-Insight does not manage local Prometheus, Tempo, or Grafana services there yet.
+| Windows | `amd64` / `x86_64` |
 
 ---
 
@@ -84,7 +83,7 @@ Use a machine with network access to download the files listed above. The filena
 
 ### 3. Install from the local directory
 
-Place the three `.tar.gz` files in a single directory and run:
+Place the three release archives (`.tar.gz` or `.zip`, depending on platform) in a single directory and run:
 
 ```bash
 rl-insight server install --local-archive /path/to/archives
@@ -111,11 +110,11 @@ grafana:
 
 ### 1. Get the archives
 
-Follow Approach 2 to identify and download the three `.tar.gz` files.
+Follow Approach 2 to identify and download the three release archives (`.tar.gz` or `.zip`, depending on platform).
 
 ### 2. Extract and place
 
-The default managed directory is `~/.rl-insight/services`. All three services extract the same way: `tar -xzf` into a temp directory, then copy the output into place.
+On Windows, extract the archives and configure `binary_path` for each service; keep the full Grafana directory. The commands below are for Linux.
 
 ```bash
 PROMETHEUS_ARCHIVE=prometheus-2.54.1.linux-arm64.tar.gz
