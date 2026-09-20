@@ -10,6 +10,8 @@
 //   panels:    [{ key, outputKey, id, title, queries, description?, links?,
 //                 vizBase?, vizPatch?, transformations?, queryOptions? }]
 //   rows?:     { <name>: <RowsLayoutRow spec> }   (panels referenced by `key`)
+//   rowItems?: { <existing row name>: [GridLayoutItem, ...] }
+//              additive extension of an existing row, no rows created
 //   variables?: { <name>: <variable spec> }
 //   tags?:     [tag, ...]
 //
@@ -161,6 +163,60 @@ local compose(modules, dashboard) =
     'row name',
     rowsMerged
   );
+  // `rowItems` is additive: modules append GridLayoutItems to rows owned by
+  // other (or their own) modules without creating rows. Extensions are folded
+  // in composition order, so items appended by earlier modules come first.
+  // Appended `ElementReference` names are resolved together with the row's
+  // own references at render time (late key -> outputKey resolution).
+  local rowItemExtensions = [
+    if has(module, 'rowItems') then module.rowItems else {}
+    for module in checkedModules
+  ];
+  // Every extension target is validated eagerly: unknown names and rows whose
+  // structure cannot take items fail evaluation instead of being ignored.
+  // (Object-merge fields are lazy, so validation must flow through a value
+  // the dashboard actually uses.)
+  local extensionTargets =
+    std.flattenArrays([std.objectFields(ext) for ext in rowItemExtensions]);
+  local validatedExtensions = [
+    require(
+      std.objectHas(rows, name),
+      'unknown row extension target: ' + name,
+      require(
+        has(rows[name], 'kind')
+          && rows[name].kind == 'RowsLayoutRow'
+          && has(rows[name], 'spec')
+          && has(rows[name].spec, 'layout')
+          && has(rows[name].spec.layout, 'kind')
+          && rows[name].spec.layout.kind == 'GridLayout'
+          && has(rows[name].spec.layout, 'spec')
+          && has(rows[name].spec.layout.spec, 'items'),
+        'unsupported row extension target: expected a RowsLayoutRow with a '
+          + 'GridLayout layout carrying spec.items',
+        rows[name]
+      )
+    )
+    for name in extensionTargets
+  ];
+  local extensionDigest = std.toString(validatedExtensions);
+  assert std.type(extensionDigest) == 'string' : 'rowItems validation failed';
+  local rowsExtended = std.foldl(
+    function(acc, extensions)
+      acc + {
+        [name]:
+          acc[name]
+          {
+            spec: acc[name].spec {
+              layout: acc[name].spec.layout {
+                spec: { items: acc[name].spec.layout.spec.items + extensions[name] },
+              },
+            },
+          }
+        for name in std.objectFields(extensions)
+      },
+    rowItemExtensions,
+    rows
+  );
   local variablesMerged = mergedField(checkedModules, 'variables');
   local variables = requireUnique(
     std.flattenArrays([
@@ -181,10 +237,10 @@ local compose(modules, dashboard) =
     variables
   );
   local rowsOrdered = require(
-    std.length([name for name in dashboard.rowOrder if !std.objectHas(rows, name)]) == 0,
+    std.length([name for name in dashboard.rowOrder if !std.objectHas(rowsExtended, name)]) == 0,
     'unknown row(s) in rowOrder: '
-      + std.join(', ', [name for name in dashboard.rowOrder if !std.objectHas(rows, name)]),
-    rows
+      + std.join(', ', [name for name in dashboard.rowOrder if !std.objectHas(rowsExtended, name)]),
+    rowsExtended
   );
   local moduleTags = std.flattenArrays([
     if has(module, 'tags') then module.tags else []

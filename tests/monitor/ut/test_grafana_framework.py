@@ -140,6 +140,41 @@ def render(tmp_path: Path, config: Path, out: str) -> dict:
     return json.loads(path.read_text(encoding="utf-8"))
 
 
+def extension_module_source(
+    prefix: str, panel_id: int, target_row: str, panel_key: str
+) -> str:
+    """An additive module: one panel plus `rowItems`, owning no rows."""
+    module: dict = {
+        "panels": [
+            {
+                "key": f"{prefix}.panel",
+                "outputKey": f"{prefix}-panel",
+                "id": panel_id,
+                "title": f"{prefix} panel",
+                "queries": [{"expr": f"toy_{prefix}_metric"}],
+            }
+        ],
+        "rowItems": {
+            target_row: [
+                {
+                    "kind": "GridLayoutItem",
+                    "spec": {
+                        "x": 12,
+                        "y": 0,
+                        "width": 12,
+                        "height": 8,
+                        "element": {
+                            "kind": "ElementReference",
+                            "name": panel_key,
+                        },
+                    },
+                }
+            ]
+        },
+    }
+    return f"local {prefix} = " + json.dumps(module) + ";"
+
+
 DASHBOARD = (
     "{ metadata: { name: 'toy', uid: 'toy' }, title: 'Toy dashboard', "
     "tags: ['example'], spec: {}, variableOrder: %s, rowOrder: %s }"
@@ -302,3 +337,105 @@ def test_variable_order_follows_the_composition_config(tmp_path: Path) -> None:
 
     assert variable_names("['zone_m1', 'zone_m2']", "fwd") == ["zone_m1", "zone_m2"]
     assert variable_names("['zone_m2', 'zone_m1']", "rev") == ["zone_m2", "zone_m1"]
+
+
+def row_item_names(composed: dict, row_name: str) -> list[str]:
+    row = next(
+        candidate
+        for candidate in composed["spec"]["layout"]["spec"]["rows"]
+        if candidate["spec"]["title"] == row_name
+    )
+    return [
+        item["spec"]["element"]["name"]
+        for item in row["spec"]["layout"]["spec"]["items"]
+    ]
+
+
+def test_row_items_single_extension_appends_and_resolves(tmp_path: Path) -> None:
+    # The extension module owns no rows (panels + rowItems only) and appends
+    # one item to the row owned by the base module; the appended
+    # ElementReference resolves through key -> outputKey like any other.
+    body = (
+        module_source("m1", 1)
+        + extension_module_source("m1x", 11, "m1-row", "m1x.panel")
+        + "local composer = import '"
+        + str(COMPOSER)
+        + "';\n"
+        + "{ compose: composer.compose([m1, m1x], "
+        + DASHBOARD % ("['zone_m1']", "['m1-row']")
+        + ") }\n"
+    )
+    config = write_config(tmp_path, body)
+    composed = render(tmp_path, config, "out")
+    assert set(composed["spec"]["elements"]) == {"m1-panel", "m1x-panel"}
+    assert row_item_names(composed, "m1 row") == ["m1-panel", "m1x-panel"]
+    # rowItems never creates rows: the only row is the one m1 owns.
+    assert len(composed["spec"]["layout"]["spec"]["rows"]) == 1
+
+
+def test_row_items_append_in_composition_order(tmp_path: Path) -> None:
+    def composed_items(module_order: list[str], out: str) -> list[str]:
+        body = (
+            module_source("m1", 1)
+            + extension_module_source("e1", 11, "m1-row", "e1.panel")
+            + extension_module_source("e2", 12, "m1-row", "e2.panel")
+            + "local composer = import '"
+            + str(COMPOSER)
+            + "';\n"
+            + "{ compose: composer.compose(["
+            + ", ".join(module_order)
+            + "], "
+            + DASHBOARD % ("['zone_m1']", "['m1-row']")
+            + ") }\n"
+        )
+        config = write_config(tmp_path / f"src-{out}", body)
+        return row_item_names(render(tmp_path, config, f"out-{out}"), "m1 row")
+
+    assert composed_items(["m1", "e1", "e2"], "fwd") == [
+        "m1-panel",
+        "e1-panel",
+        "e2-panel",
+    ]
+    assert composed_items(["m1", "e2", "e1"], "rev") == [
+        "m1-panel",
+        "e2-panel",
+        "e1-panel",
+    ]
+
+
+def test_row_items_unknown_target_is_rejected(tmp_path: Path) -> None:
+    body = (
+        module_source("m1", 1)
+        + extension_module_source("e1", 11, "missing-row", "m1.panel")
+        + "local composer = import '"
+        + str(COMPOSER)
+        + "';\n"
+        + "{ compose: composer.compose([m1, e1], "
+        + DASHBOARD % ("['zone_m1']", "['m1-row']")
+        + ") }\n"
+    )
+    config = write_config(tmp_path, body)
+    proc = run_generate(
+        "--config", str(config), "--out-dir", str(tmp_path / "out"), expect=2
+    )
+    assert "unknown row extension target: missing-row" in proc.stderr
+
+
+def test_row_items_unsupported_target_is_rejected(tmp_path: Path) -> None:
+    # A target row whose layout is not a GridLayout cannot take items; the
+    # composer must fail loudly instead of silently ignoring the extension.
+    body = (
+        module_source("m1", 1).replace('"kind": "GridLayout"', '"kind": "RowsLayout"')
+        + extension_module_source("e1", 11, "m1-row", "e1.panel")
+        + "local composer = import '"
+        + str(COMPOSER)
+        + "';\n"
+        + "{ compose: composer.compose([m1, e1], "
+        + DASHBOARD % ("['zone_m1']", "['m1-row']")
+        + ") }\n"
+    )
+    config = write_config(tmp_path, body)
+    proc = run_generate(
+        "--config", str(config), "--out-dir", str(tmp_path / "out"), expect=2
+    )
+    assert "unsupported row extension target" in proc.stderr
