@@ -1,18 +1,5 @@
-// vllm specific panels, rows, and variables.
+// vLLM inference content plus the CPU portion of its unchanged hardware row.
 {
-  metadata: {
-    name: 'a4cabbce-92af-4a84-9399-4deba24ae6d1',
-    generation: 45,
-    creationTimestamp: '2026-07-08T14:34:31Z',
-    labels: {},
-    annotations: {},
-  },
-  title: 'verl_trainer_v1_with_vllm_engine',
-  tags: [
-    'RL-Insight',
-    'verl',
-    'vllm',
-  ],
   panels: [
     {
       key: 'engine.vllm.metric.vllm_token_throughput',
@@ -1843,688 +1830,8 @@
         },
       },
     },
-    {
-      key: 'hardware.ascend_npu_metrics.npu_ai_core_utilization',
-      outputKey: 'panel-329',
-      id: 329,
-      title: 'NPU AI Core Utilization',
-      queries: [
-        {
-          expr: 'npu_chip_info_utilization{job="npu-exporter", instance=~"$npu_instance"}',
-          editorMode: 'code',
-          legend: 'NPU {{id}}',
-          labels: {
-            'grafana.app/export-label': 'prometheus-1',
-          },
-        },
-      ],
-      description: 'AI Core utilization by NPU',
-      vizPatch: {
-        spec: {
-          options: {
-            legend: {
-              calcs: [
-                'mean',
-                'max',
-              ],
-              displayMode: 'table',
-            },
-            tooltip: {
-              mode: 'multi',
-            },
-          },
-          fieldConfig: {
-            defaults: {
-              unit: 'percent',
-              thresholds: {
-                steps: [
-                  {
-                    value: 0,
-                    color: 'green',
-                  },
-                ],
-              },
-              custom: {
-                fillOpacity: 20,
-                showPoints: 'auto',
-              },
-              min: 0,
-              max: 100,
-            },
-          },
-        },
-      },
-    },
-    {
-      key: 'hardware.ascend_npu_metrics.npu_hbm_utilization',
-      outputKey: 'panel-330',
-      id: 330,
-      title: 'NPU HBM Utilization',
-      queries: [
-        {
-          expr: 'npu_chip_info_hbm_utilization{job="npu-exporter", instance=~"$npu_instance"}',
-          editorMode: 'code',
-          legend: 'NPU {{id}}',
-          labels: {
-            'grafana.app/export-label': 'prometheus-1',
-          },
-        },
-      ],
-      description: 'HBM utilization by NPU',
-      vizPatch: {
-        spec: {
-          options: {
-            legend: {
-              calcs: [
-                'mean',
-                'max',
-              ],
-              displayMode: 'table',
-            },
-            tooltip: {
-              mode: 'multi',
-            },
-          },
-          fieldConfig: {
-            defaults: {
-              unit: 'percent',
-              thresholds: {
-                steps: [
-                  {
-                    value: 0,
-                    color: 'green',
-                  },
-                ],
-              },
-              custom: {
-                fillOpacity: 20,
-                showPoints: 'auto',
-              },
-              min: 0,
-              max: 100,
-            },
-          },
-        },
-      },
-    },
-    {
-      key: 'hardware.ascend_npu_metrics.npu_hbm_used_memory',
-      outputKey: 'panel-331',
-      id: 331,
-      title: 'NPU HBM Used Memory',
-      queries: [
-        {
-          expr: 'npu_chip_info_hbm_used_memory{job="npu-exporter", instance=~"$npu_instance"}',
-          editorMode: 'code',
-          legend: 'NPU {{id}}',
-          labels: {
-            'grafana.app/export-label': 'prometheus-1',
-          },
-        },
-      ],
-      description: 'Used HBM memory by NPU',
-      vizPatch: {
-        spec: {
-          options: {
-            legend: {
-              calcs: [
-                'mean',
-                'max',
-              ],
-              displayMode: 'table',
-            },
-            tooltip: {
-              mode: 'multi',
-            },
-          },
-          fieldConfig: {
-            defaults: {
-              unit: 'decmbytes',
-              thresholds: {
-                steps: [
-                  {
-                    value: 0,
-                    color: 'green',
-                  },
-                ],
-              },
-              custom: {
-                fillOpacity: 20,
-                showPoints: 'auto',
-              },
-              min: 0,
-            },
-          },
-        },
-      },
-    },
-    {
-      key: 'hardware.ascend_npu_metrics.npu_power',
-      outputKey: 'panel-332',
-      id: 332,
-      title: 'NPU Power',
-      queries: [
-        {
-          expr: 'npu_chip_info_power{job="npu-exporter", instance=~"$npu_instance"}',
-          editorMode: 'code',
-          legend: 'NPU {{id}}',
-          labels: {
-            'grafana.app/export-label': 'prometheus-1',
-          },
-        },
-      ],
-      description: 'Power consumption by NPU',
-      vizPatch: {
-        spec: {
-          options: {
-            legend: {
-              calcs: [
-                'mean',
-                'max',
-              ],
-              displayMode: 'table',
-            },
-            tooltip: {
-              mode: 'multi',
-            },
-          },
-          fieldConfig: {
-            defaults: {
-              unit: 'watt',
-              thresholds: {
-                steps: [
-                  {
-                    value: 0,
-                    color: 'green',
-                  },
-                ],
-              },
-              custom: {
-                fillOpacity: 20,
-                showPoints: 'auto',
-              },
-              min: 0,
-            },
-          },
-        },
-      },
-    },
-    {
-      key: 'hardware.ascend_npu_metrics.npu_temperature',
-      outputKey: 'panel-333',
-      id: 333,
-      title: 'NPU Temperature',
-      queries: [
-        {
-          expr: 'npu_chip_info_temperature{job="npu-exporter", instance=~"$npu_instance"}',
-          editorMode: 'code',
-          legend: 'NPU {{id}}',
-          labels: {
-            'grafana.app/export-label': 'prometheus-1',
-          },
-        },
-      ],
-      description: 'Chip temperature by NPU',
-      vizPatch: {
-        spec: {
-          options: {
-            legend: {
-              calcs: [
-                'mean',
-                'max',
-              ],
-              displayMode: 'table',
-            },
-            tooltip: {
-              mode: 'multi',
-            },
-          },
-          fieldConfig: {
-            defaults: {
-              unit: 'celsius',
-              thresholds: {
-                steps: [
-                  {
-                    value: 0,
-                    color: 'green',
-                  },
-                ],
-              },
-              custom: {
-                fillOpacity: 20,
-                showPoints: 'auto',
-              },
-              min: 0,
-            },
-          },
-        },
-      },
-    },
-    {
-      key: 'hardware.ascend_npu_metrics.npu_health_status',
-      outputKey: 'panel-334',
-      id: 334,
-      title: 'NPU Health Status',
-      queries: [
-        {
-          expr: 'npu_chip_info_health_status{job="npu-exporter", instance=~"$npu_instance"}',
-          editorMode: 'code',
-          legend: 'NPU {{id}}',
-          labels: {
-            'grafana.app/export-label': 'prometheus-1',
-          },
-        },
-      ],
-      description: 'Health status code reported by NPU Exporter',
-      vizPatch: {
-        spec: {
-          options: {
-            legend: {
-              calcs: [
-                'mean',
-                'max',
-              ],
-              displayMode: 'table',
-            },
-            tooltip: {
-              mode: 'multi',
-            },
-          },
-          fieldConfig: {
-            defaults: {
-              unit: 'short',
-              thresholds: {
-                steps: [
-                  {
-                    value: 0,
-                    color: 'green',
-                  },
-                ],
-              },
-              custom: {
-                fillOpacity: 20,
-                showPoints: 'auto',
-              },
-              min: 0,
-            },
-          },
-        },
-      },
-    },
-    {
-      key: 'hardware.ascend_npu_metrics.npu_hbm_bandwidth_utilization',
-      outputKey: 'panel-335',
-      id: 335,
-      title: 'NPU HBM Bandwidth Utilization',
-      queries: [
-        {
-          expr: 'npu_chip_info_hbm_bandwidth_utilization{job="npu-exporter", instance=~"$npu_instance"}',
-          editorMode: 'code',
-          legend: 'NPU {{id}}',
-          labels: {
-            'grafana.app/export-label': 'prometheus-1',
-          },
-        },
-      ],
-      description: 'HBM bandwidth utilization by NPU',
-      vizPatch: {
-        spec: {
-          options: {
-            legend: {
-              calcs: [
-                'mean',
-                'max',
-              ],
-              displayMode: 'table',
-            },
-            tooltip: {
-              mode: 'multi',
-            },
-          },
-          fieldConfig: {
-            defaults: {
-              unit: 'percent',
-              thresholds: {
-                steps: [
-                  {
-                    value: 0,
-                    color: 'green',
-                  },
-                ],
-              },
-              custom: {
-                fillOpacity: 20,
-                showPoints: 'auto',
-              },
-              min: 0,
-              max: 100,
-            },
-          },
-        },
-      },
-    },
-    {
-      key: 'hardware.ascend_npu_metrics.npu_network_throughput',
-      outputKey: 'panel-336',
-      id: 336,
-      title: 'NPU Network Throughput',
-      queries: [
-        {
-          expr: 'npu_chip_info_bandwidth_rx{job="npu-exporter", instance=~"$npu_instance"}',
-          editorMode: 'code',
-          legend: 'NPU {{id}} RX',
-          labels: {
-            'grafana.app/export-label': 'prometheus-1',
-          },
-        },
-        {
-          expr: 'npu_chip_info_bandwidth_tx{job="npu-exporter", instance=~"$npu_instance"}',
-          editorMode: 'code',
-          legend: 'NPU {{id}} TX',
-          labels: {
-            'grafana.app/export-label': 'prometheus-1',
-          },
-        },
-      ],
-      description: 'NPU network receive and transmit throughput',
-      vizPatch: {
-        spec: {
-          options: {
-            legend: {
-              calcs: [
-                'mean',
-                'max',
-              ],
-              displayMode: 'table',
-            },
-            tooltip: {
-              mode: 'multi',
-            },
-          },
-          fieldConfig: {
-            defaults: {
-              unit: 'MBs',
-              thresholds: {
-                steps: [
-                  {
-                    value: 0,
-                    color: 'green',
-                  },
-                ],
-              },
-              custom: {
-                fillOpacity: 20,
-                showPoints: 'auto',
-              },
-              min: 0,
-            },
-          },
-        },
-      },
-    },
   ],
   rows: {
-    'vllm engine metric': {
-      kind: 'RowsLayoutRow',
-      spec: {
-        title: 'vllm engine metric',
-        collapse: true,
-        layout: {
-          kind: 'GridLayout',
-          spec: {
-            items: [
-              {
-                kind: 'GridLayoutItem',
-                spec: {
-                  x: 0,
-                  y: 0,
-                  width: 12,
-                  height: 8,
-                  element: {
-                    kind: 'ElementReference',
-                    name: 'engine.vllm.metric.vllm_token_throughput',
-                  },
-                },
-              },
-              {
-                kind: 'GridLayoutItem',
-                spec: {
-                  x: 12,
-                  y: 0,
-                  width: 12,
-                  height: 8,
-                  element: {
-                    kind: 'ElementReference',
-                    name: 'engine.vllm.metric.vllm_time_per_output_token_latency',
-                  },
-                },
-              },
-              {
-                kind: 'GridLayoutItem',
-                spec: {
-                  x: 0,
-                  y: 8,
-                  width: 12,
-                  height: 8,
-                  element: {
-                    kind: 'ElementReference',
-                    name: 'engine.vllm.metric.vllm_cache_utilization',
-                  },
-                },
-              },
-              {
-                kind: 'GridLayoutItem',
-                spec: {
-                  x: 12,
-                  y: 8,
-                  width: 12,
-                  height: 8,
-                  element: {
-                    kind: 'ElementReference',
-                    name: 'engine.vllm.metric.vllm_time_to_first_token_latency',
-                  },
-                },
-              },
-              {
-                kind: 'GridLayoutItem',
-                spec: {
-                  x: 0,
-                  y: 16,
-                  width: 12,
-                  height: 8,
-                  element: {
-                    kind: 'ElementReference',
-                    name: 'engine.vllm.metric.vllm_e2e_request_latency',
-                  },
-                },
-              },
-              {
-                kind: 'GridLayoutItem',
-                spec: {
-                  x: 12,
-                  y: 16,
-                  width: 12,
-                  height: 8,
-                  element: {
-                    kind: 'ElementReference',
-                    name: 'engine.vllm.metric.vllm_scheduler_state',
-                  },
-                },
-              },
-              {
-                kind: 'GridLayoutItem',
-                spec: {
-                  x: 0,
-                  y: 24,
-                  width: 12,
-                  height: 8,
-                  element: {
-                    kind: 'ElementReference',
-                    name: 'engine.vllm.metric.vllm_request_prompt_length',
-                  },
-                },
-              },
-              {
-                kind: 'GridLayoutItem',
-                spec: {
-                  x: 12,
-                  y: 24,
-                  width: 12,
-                  height: 8,
-                  element: {
-                    kind: 'ElementReference',
-                    name: 'engine.vllm.metric.vllm_request_generation_length',
-                  },
-                },
-              },
-              {
-                kind: 'GridLayoutItem',
-                spec: {
-                  x: 0,
-                  y: 32,
-                  width: 12,
-                  height: 8,
-                  element: {
-                    kind: 'ElementReference',
-                    name: 'engine.vllm.metric.vllm_finish_reason',
-                  },
-                },
-              },
-              {
-                kind: 'GridLayoutItem',
-                spec: {
-                  x: 12,
-                  y: 32,
-                  width: 12,
-                  height: 8,
-                  element: {
-                    kind: 'ElementReference',
-                    name: 'engine.vllm.metric.vllm_queue_time',
-                  },
-                },
-              },
-              {
-                kind: 'GridLayoutItem',
-                spec: {
-                  x: 0,
-                  y: 40,
-                  width: 12,
-                  height: 8,
-                  element: {
-                    kind: 'ElementReference',
-                    name: 'engine.vllm.metric.vllm_requests_prefill_and_decode_time',
-                  },
-                },
-              },
-              {
-                kind: 'GridLayoutItem',
-                spec: {
-                  x: 12,
-                  y: 40,
-                  width: 12,
-                  height: 8,
-                  element: {
-                    kind: 'ElementReference',
-                    name: 'engine.vllm.metric.vllm_max_generation_token_in_sequence_group',
-                  },
-                },
-              },
-              {
-                kind: 'GridLayoutItem',
-                spec: {
-                  x: 0,
-                  y: 48,
-                  width: 12,
-                  height: 8,
-                  element: {
-                    kind: 'ElementReference',
-                    name: 'engine.vllm.metric.vllm_prefix_cache_hit_rate',
-                  },
-                },
-              },
-              {
-                kind: 'GridLayoutItem',
-                spec: {
-                  x: 12,
-                  y: 48,
-                  width: 12,
-                  height: 8,
-                  element: {
-                    kind: 'ElementReference',
-                    name: 'engine.vllm.metric.specdecoding_mean_acceptance_length',
-                  },
-                },
-              },
-              {
-                kind: 'GridLayoutItem',
-                spec: {
-                  x: 0,
-                  y: 56,
-                  width: 12,
-                  height: 8,
-                  element: {
-                    kind: 'ElementReference',
-                    name: 'engine.vllm.metric.specdecoding_accepted_vs_drafted_throughput',
-                  },
-                },
-              },
-              {
-                kind: 'GridLayoutItem',
-                spec: {
-                  x: 12,
-                  y: 56,
-                  width: 12,
-                  height: 8,
-                  element: {
-                    kind: 'ElementReference',
-                    name: 'engine.vllm.metric.specdecoding_draft_acceptance_rate',
-                  },
-                },
-              },
-              {
-                kind: 'GridLayoutItem',
-                spec: {
-                  x: 0,
-                  y: 64,
-                  width: 12,
-                  height: 8,
-                  element: {
-                    kind: 'ElementReference',
-                    name: 'engine.vllm.metric.specdecoding_accepted_vs_drafted_tokens',
-                  },
-                },
-              },
-              {
-                kind: 'GridLayoutItem',
-                spec: {
-                  x: 12,
-                  y: 64,
-                  width: 12,
-                  height: 8,
-                  element: {
-                    kind: 'ElementReference',
-                    name: 'engine.vllm.metric.specdecoding_draft_acceptance_rate.2',
-                  },
-                },
-              },
-              {
-                kind: 'GridLayoutItem',
-                spec: {
-                  x: 0,
-                  y: 72,
-                  width: 12,
-                  height: 8,
-                  element: {
-                    kind: 'ElementReference',
-                    name: 'engine.vllm.metric.specdecoding_mean_acceptance_length.2',
-                  },
-                },
-              },
-            ],
-          },
-        },
-      },
-    },
     'hardware metric': {
       kind: 'RowsLayoutRow',
       spec: {
@@ -2854,15 +2161,322 @@
         },
       },
     },
+    'vllm engine metric': {
+      kind: 'RowsLayoutRow',
+      spec: {
+        title: 'vllm engine metric',
+        collapse: true,
+        layout: {
+          kind: 'GridLayout',
+          spec: {
+            items: [
+              {
+                kind: 'GridLayoutItem',
+                spec: {
+                  x: 0,
+                  y: 0,
+                  width: 12,
+                  height: 8,
+                  element: {
+                    kind: 'ElementReference',
+                    name: 'engine.vllm.metric.vllm_token_throughput',
+                  },
+                },
+              },
+              {
+                kind: 'GridLayoutItem',
+                spec: {
+                  x: 12,
+                  y: 0,
+                  width: 12,
+                  height: 8,
+                  element: {
+                    kind: 'ElementReference',
+                    name: 'engine.vllm.metric.vllm_time_per_output_token_latency',
+                  },
+                },
+              },
+              {
+                kind: 'GridLayoutItem',
+                spec: {
+                  x: 0,
+                  y: 8,
+                  width: 12,
+                  height: 8,
+                  element: {
+                    kind: 'ElementReference',
+                    name: 'engine.vllm.metric.vllm_cache_utilization',
+                  },
+                },
+              },
+              {
+                kind: 'GridLayoutItem',
+                spec: {
+                  x: 12,
+                  y: 8,
+                  width: 12,
+                  height: 8,
+                  element: {
+                    kind: 'ElementReference',
+                    name: 'engine.vllm.metric.vllm_time_to_first_token_latency',
+                  },
+                },
+              },
+              {
+                kind: 'GridLayoutItem',
+                spec: {
+                  x: 0,
+                  y: 16,
+                  width: 12,
+                  height: 8,
+                  element: {
+                    kind: 'ElementReference',
+                    name: 'engine.vllm.metric.vllm_e2e_request_latency',
+                  },
+                },
+              },
+              {
+                kind: 'GridLayoutItem',
+                spec: {
+                  x: 12,
+                  y: 16,
+                  width: 12,
+                  height: 8,
+                  element: {
+                    kind: 'ElementReference',
+                    name: 'engine.vllm.metric.vllm_scheduler_state',
+                  },
+                },
+              },
+              {
+                kind: 'GridLayoutItem',
+                spec: {
+                  x: 0,
+                  y: 24,
+                  width: 12,
+                  height: 8,
+                  element: {
+                    kind: 'ElementReference',
+                    name: 'engine.vllm.metric.vllm_request_prompt_length',
+                  },
+                },
+              },
+              {
+                kind: 'GridLayoutItem',
+                spec: {
+                  x: 12,
+                  y: 24,
+                  width: 12,
+                  height: 8,
+                  element: {
+                    kind: 'ElementReference',
+                    name: 'engine.vllm.metric.vllm_request_generation_length',
+                  },
+                },
+              },
+              {
+                kind: 'GridLayoutItem',
+                spec: {
+                  x: 0,
+                  y: 32,
+                  width: 12,
+                  height: 8,
+                  element: {
+                    kind: 'ElementReference',
+                    name: 'engine.vllm.metric.vllm_finish_reason',
+                  },
+                },
+              },
+              {
+                kind: 'GridLayoutItem',
+                spec: {
+                  x: 12,
+                  y: 32,
+                  width: 12,
+                  height: 8,
+                  element: {
+                    kind: 'ElementReference',
+                    name: 'engine.vllm.metric.vllm_queue_time',
+                  },
+                },
+              },
+              {
+                kind: 'GridLayoutItem',
+                spec: {
+                  x: 0,
+                  y: 40,
+                  width: 12,
+                  height: 8,
+                  element: {
+                    kind: 'ElementReference',
+                    name: 'engine.vllm.metric.vllm_requests_prefill_and_decode_time',
+                  },
+                },
+              },
+              {
+                kind: 'GridLayoutItem',
+                spec: {
+                  x: 12,
+                  y: 40,
+                  width: 12,
+                  height: 8,
+                  element: {
+                    kind: 'ElementReference',
+                    name: 'engine.vllm.metric.vllm_max_generation_token_in_sequence_group',
+                  },
+                },
+              },
+              {
+                kind: 'GridLayoutItem',
+                spec: {
+                  x: 0,
+                  y: 48,
+                  width: 12,
+                  height: 8,
+                  element: {
+                    kind: 'ElementReference',
+                    name: 'engine.vllm.metric.vllm_prefix_cache_hit_rate',
+                  },
+                },
+              },
+              {
+                kind: 'GridLayoutItem',
+                spec: {
+                  x: 12,
+                  y: 48,
+                  width: 12,
+                  height: 8,
+                  element: {
+                    kind: 'ElementReference',
+                    name: 'engine.vllm.metric.specdecoding_mean_acceptance_length',
+                  },
+                },
+              },
+              {
+                kind: 'GridLayoutItem',
+                spec: {
+                  x: 0,
+                  y: 56,
+                  width: 12,
+                  height: 8,
+                  element: {
+                    kind: 'ElementReference',
+                    name: 'engine.vllm.metric.specdecoding_accepted_vs_drafted_throughput',
+                  },
+                },
+              },
+              {
+                kind: 'GridLayoutItem',
+                spec: {
+                  x: 12,
+                  y: 56,
+                  width: 12,
+                  height: 8,
+                  element: {
+                    kind: 'ElementReference',
+                    name: 'engine.vllm.metric.specdecoding_draft_acceptance_rate',
+                  },
+                },
+              },
+              {
+                kind: 'GridLayoutItem',
+                spec: {
+                  x: 0,
+                  y: 64,
+                  width: 12,
+                  height: 8,
+                  element: {
+                    kind: 'ElementReference',
+                    name: 'engine.vllm.metric.specdecoding_accepted_vs_drafted_tokens',
+                  },
+                },
+              },
+              {
+                kind: 'GridLayoutItem',
+                spec: {
+                  x: 12,
+                  y: 64,
+                  width: 12,
+                  height: 8,
+                  element: {
+                    kind: 'ElementReference',
+                    name: 'engine.vllm.metric.specdecoding_draft_acceptance_rate.2',
+                  },
+                },
+              },
+              {
+                kind: 'GridLayoutItem',
+                spec: {
+                  x: 0,
+                  y: 72,
+                  width: 12,
+                  height: 8,
+                  element: {
+                    kind: 'ElementReference',
+                    name: 'engine.vllm.metric.specdecoding_mean_acceptance_length.2',
+                  },
+                },
+              },
+            ],
+          },
+        },
+      },
+    },
   },
-  rowOrder: [
-    'rl state timeline',
-    'training metric',
-    'vllm engine metric',
-    'transfer queue metric',
-    'hardware metric',
-  ],
   variables: {
+    interval: {
+      kind: 'CustomVariable',
+      spec: {
+        name: 'interval',
+        query: '',
+        current: {
+          text: '5m',
+          value: '5m',
+        },
+        options: [],
+        multi: false,
+        includeAll: false,
+        label: 'vllm: Interval',
+        hide: 'dontHide',
+        skipUrlSync: false,
+        allowCustomValue: true,
+        valuesFormat: 'csv',
+      },
+    },
+    replica: {
+      kind: 'QueryVariable',
+      spec: {
+        name: 'replica',
+        current: {
+          text: '',
+          value: '',
+        },
+        label: 'vllm: Rollout Replica',
+        hide: 'dontHide',
+        refresh: 'onDashboardLoad',
+        skipUrlSync: false,
+        description: 'Replica rank of rollout',
+        query: {
+          kind: 'DataQuery',
+          group: 'prometheus',
+          version: 'v0',
+          spec: {
+            qryType: 1,
+            query: 'label_values(vllm:request_prompt_tokens_sum,replica)',
+            refId: 'PrometheusVariableQueryEditor-VariableQuery',
+          },
+        },
+        regex: '',
+        regexApplyTo: 'value',
+        sort: 'disabled',
+        definition: 'label_values(vllm:request_prompt_tokens_sum,replica)',
+        options: [],
+        multi: false,
+        includeAll: true,
+        allValue: '.*',
+        allowCustomValue: true,
+      },
+    },
     vllm_model_name: {
       kind: 'QueryVariable',
       spec: {
@@ -2933,106 +2547,5 @@
         allowCustomValue: true,
       },
     },
-    interval: {
-      kind: 'CustomVariable',
-      spec: {
-        name: 'interval',
-        query: '',
-        current: {
-          text: '5m',
-          value: '5m',
-        },
-        options: [],
-        multi: false,
-        includeAll: false,
-        label: 'vllm: Interval',
-        hide: 'dontHide',
-        skipUrlSync: false,
-        allowCustomValue: true,
-        valuesFormat: 'csv',
-      },
-    },
-    replica: {
-      kind: 'QueryVariable',
-      spec: {
-        name: 'replica',
-        current: {
-          text: '',
-          value: '',
-        },
-        label: 'vllm: Rollout Replica',
-        hide: 'dontHide',
-        refresh: 'onDashboardLoad',
-        skipUrlSync: false,
-        description: 'Replica rank of rollout',
-        query: {
-          kind: 'DataQuery',
-          group: 'prometheus',
-          version: 'v0',
-          spec: {
-            qryType: 1,
-            query: 'label_values(vllm:request_prompt_tokens_sum,replica)',
-            refId: 'PrometheusVariableQueryEditor-VariableQuery',
-          },
-        },
-        regex: '',
-        regexApplyTo: 'value',
-        sort: 'disabled',
-        definition: 'label_values(vllm:request_prompt_tokens_sum,replica)',
-        options: [],
-        multi: false,
-        includeAll: true,
-        allValue: '.*',
-        allowCustomValue: true,
-      },
-    },
-    npu_instance: {
-      kind: 'QueryVariable',
-      spec: {
-        name: 'npu_instance',
-        current: {
-          text: 'All',
-          value: '$__all',
-        },
-        label: 'hardware: NPU Node',
-        hide: 'hideVariable',
-        refresh: 'onDashboardLoad',
-        skipUrlSync: false,
-        query: {
-          kind: 'DataQuery',
-          group: 'prometheus',
-          version: 'v0',
-          datasource: {
-            name: '${datasource}',
-          },
-          spec: {
-            query: 'label_values(npu_chip_info_name{job="npu-exporter"}, instance)',
-            refId: 'StandardVariableQuery',
-          },
-        },
-        regex: '',
-        regexApplyTo: 'value',
-        sort: 'alphabeticalAsc',
-        definition: 'label_values(npu_chip_info_name{job="npu-exporter"}, instance)',
-        options: [],
-        multi: true,
-        includeAll: true,
-        allValue: '.*',
-        allowCustomValue: false,
-      },
-    },
   },
-  variableOrder: [
-    'datasource',
-    'project',
-    'experiment_name',
-    'vllm_model_name',
-    'workerid',
-    'interval',
-    'replica',
-    'task_name',
-    'op_type',
-    'quantile',
-    'npu_instance',
-  ],
 }

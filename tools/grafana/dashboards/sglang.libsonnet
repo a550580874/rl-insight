@@ -1,18 +1,5 @@
-// sglang specific panels, rows, and variables.
+// SGLang-specific inference content.
 {
-  metadata: {
-    name: 'd436bdfd-f96e-4c62-b0b1-8e8315c1757a',
-    generation: 1,
-    creationTimestamp: '2026-07-08T14:34:31Z',
-    labels: {},
-    annotations: {},
-  },
-  title: 'verl_trainer_v1_with_sglang_engine',
-  tags: [
-    'RL-Insight',
-    'verl',
-    'sglang',
-  ],
   panels: [
     {
       key: 'engine.sglang.metric.sglang_end_to_end_request_latency',
@@ -1120,13 +1107,6 @@
       },
     },
   },
-  rowOrder: [
-    'rl state timeline',
-    'training metric',
-    'sglang engine metric',
-    'transfer queue metric',
-    'device metric',
-  ],
   variables: {
     sglang_model_name: {
       kind: 'QueryVariable',
@@ -1200,14 +1180,4 @@
       },
     },
   },
-  variableOrder: [
-    'datasource',
-    'project',
-    'experiment_name',
-    'sglang_model_name',
-    'sglang_replica',
-    'task_name',
-    'op_type',
-    'quantile',
-  ],
 }
