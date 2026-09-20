@@ -37,7 +37,9 @@ recipe = [
 ]
 test = [
   "pytest",
-  "gojsonnet>=0.22.0",
+  # gojsonnet publishes no Windows wheels; Windows CI installs the identical
+  # go-jsonnet engine as the `jsonnet` CLI instead (see monitor_unit_test.yml).
+  "gojsonnet>=0.22.0; platform_system != 'Windows'",
 ]
 
 [project.scripts]

@@ -172,11 +172,16 @@ A composition config evaluates to `{ "<dashboard-name>": <dashboard resource> }`
 where each resource is the object returned by `composer.compose(...)`; the
 generator writes one JSON file per name. Output is deterministic: go-jsonnet
 emits object fields in sorted order and the writer uses fixed indentation, so
-re-running over unchanged sources is byte-identical. The generator depends on
-the `gojsonnet` Python binding (0.22.0) — the Jsonnet evaluation engine —
-which is added to the `[test]` extra in `pyproject.toml` (the only
-modification of an existing file in this change; CI already installs
-`-e ".[test]"`, so the dependency flows through without workflow edits).
+re-running over unchanged sources is byte-identical. The generator uses the
+`gojsonnet` Python binding (0.22.0, the go-jsonnet evaluation engine) when it
+is importable and otherwise falls back to the same engine's `jsonnet` CLI.
+That fallback matters on Windows, where gojsonnet publishes no wheels: the
+test extra marks the binding `platform_system != 'Windows'`, and the monitor
+unit-test workflow installs the CLI via
+`go install github.com/google/go-jsonnet/cmd/jsonnet@v0.22.0` instead, so the
+framework tests run with the same engine version and identical output on every
+platform. Both paths come together through `pyproject.toml` and the monitor
+unit-test workflow (the only modifications of existing files in this change).
 
 ## Developer workflow
 
@@ -200,10 +205,10 @@ modification of an existing file in this change; CI already installs
   `rowItems` without owned rows). All tests build their Jsonnet inputs and
   expected outputs in `tmp_path`; no fixture JSON is committed.
 - The existing suite keeps running unchanged: this change does not touch any
-  production dashboard, the production generator, or the workflow files. The
-  test path (`tests/monitor/ut/**`) is already picked up by
-  `monitor_unit_test.yml`, so CI runs the framework tests with no workflow
-  changes.
+  production dashboard or the production generator. CI picks the tests up via
+  the `tests/monitor/ut/**` path filter in `monitor_unit_test.yml`, which
+  gains one Windows-only step installing the `jsonnet` CLI (gojsonnet ships
+  no Windows wheels; see Generator).
 - `pre-commit run --all-files` covers license headers, formatting, and compile
   checks.
 

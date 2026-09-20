@@ -26,24 +26,43 @@ from __future__ import annotations
 
 import argparse
 import json
+import shutil
+import subprocess
 import sys
 from pathlib import Path
 from typing import Any
 
 try:
     import _gojsonnet
-except ImportError:  # pragma: no cover - exercised via the CLI error path
+except ImportError:  # gojsonnet ships no Windows wheels; fall back to the CLI
     _gojsonnet = None
+
+_CLI = "jsonnet"
+
+
+def _evaluate(config: Path) -> str:
+    """Evaluate ``config`` with go-jsonnet: binding if importable, else CLI."""
+    if _gojsonnet is not None:
+        return _gojsonnet.evaluate_file(str(config))
+    executable = shutil.which(_CLI)
+    if executable is None:
+        raise RuntimeError(
+            "no Jsonnet evaluator available: install 'gojsonnet' with pip "
+            f"(non-Windows) or the '{_CLI}' CLI (go install "
+            "github.com/google/go-jsonnet/cmd/jsonnet@v0.22.0)"
+        )
+    completed = subprocess.run(
+        [executable, str(config)], capture_output=True, text=True, check=False
+    )
+    if completed.returncode != 0:
+        raise RuntimeError(completed.stderr.strip())
+    return completed.stdout
 
 
 def render(config: Path) -> dict[str, Any]:
     """Evaluate the composition config and return its dashboards."""
-    if _gojsonnet is None:
-        raise RuntimeError(
-            "gojsonnet is required; install it with: pip install 'gojsonnet>=0.22.0'"
-        )
     try:
-        rendered = _gojsonnet.evaluate_file(str(config))
+        rendered = _evaluate(config)
     except RuntimeError as error:
         raise RuntimeError(
             f"Jsonnet evaluation failed for {config}: {error}"
