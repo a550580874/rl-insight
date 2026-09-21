@@ -9,16 +9,15 @@ by tests that build their inputs in temporary directories.
 
 ## Motivation
 
-The current production dashboards under
-`rl_insight/config/services/grafana/dashboards/verl/` duplicate the same
-panel/row/variable definitions across per-engine variants — 116 panels are
-duplicated verbatim between the vLLM and SGLang dashboards. Every tweak has to
-be repeated by hand, variants are hard to extend, and the generated JSON cannot
-be checked mechanically. This framework addresses all three: modules define
-content once, composition configs decide which modules make up a dashboard,
-additive extensions enrich existing rows without forking them, and `--check`
-mode fails deterministically when the committed JSON no longer matches the
-sources.
+Dashboards maintained as hand-edited JSON tend to duplicate the same
+panel/row/variable definitions across dashboard variants: each variant is a
+near-copy of a base dashboard, every tweak has to be repeated by hand in every
+copy, variants are hard to extend without forking their rows, and the
+committed JSON cannot be checked mechanically. This framework addresses all
+three: modules define content once, composition configs decide which modules
+make up a dashboard, additive extensions enrich existing rows without forking
+them, and `--check` mode fails deterministically when the committed JSON no
+longer matches the sources.
 
 ## Architecture
 
@@ -224,18 +223,14 @@ unit-test workflow (the only modifications of existing files in this change).
 
 ## Going forward
 
-The production dashboards are migrated to this framework in a follow-up PR
-(#173): the current `common`/`vllm`/`sglang` Jsonnet sources are re-expressed
-as modules, the production composition configs list those modules, and the
-generated JSON is kept equivalent to today's artifacts — any intentional
-difference listed separately in that PR. Until that migration lands, nothing
-in `rl_insight/config/services/grafana/` changes.
-
-**Reusing the verl trainer dashboards**: the trainer panels become one more
-module extracted from the existing dashboard JSON with the same module schema —
-no framework changes are needed, that is the point of keeping the composer
-generic. Composing a new dashboard from the trainer plus any engine module
-then means writing a small composition config that lists the modules and picks
-the variable/row order. The additional development work is limited to
-authoring the module files (mechanical extraction plus review), comparable to
-the per-engine module split already planned in #173.
+New dashboard variants do not require new framework code. A variant is a
+composition config listing the base modules it reuses plus any additive
+extension modules that append panels to existing rows via `rowItems`, with
+the variable/row order picked in the config. Bringing an existing dashboard
+under the framework means re-expressing its sections as modules with the same
+schema — a mechanical extraction, no framework changes — after which the
+dashboard's JSON is generated and verified by check mode instead of being
+hand-edited. Migrating any concrete set of existing dashboards is deliberately
+out of scope here and belongs to a separate, dependent change; until such a
+migration lands, this framework ships nothing that affects existing
+dashboards.
