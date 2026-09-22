@@ -1,100 +1,370 @@
-# Grafana dashboard authoring (production compositions)
+# Grafana dashboard development
 
-This directory holds the **production** Grafana dashboard sources: semantic
-content modules, the composition registry that assembles them, a thin
-entrypoint, and a thin render wrapper. The generic machinery they use — the
-composer, the visualization defaults, and the framework generator — lives in
-[`framework/`](framework/README.md) and knows nothing about any concrete
-dashboard.
+Grafana dashboards are maintained as reusable Jsonnet modules and composed into
+the committed Grafana JSON files used by RL-Insight.
+
+The goals are:
+
+- reuse common dashboard content instead of copying large JSON files;
+- make new dashboard variants easy to add and maintain;
+- keep the existing RL-Insight / Grafana runtime behavior unchanged.
+
+## Who is this for?
+
+| Role                      | What changes?                                       | What should I do?                                                               |
+| ------------------------- | --------------------------------------------------- | ------------------------------------------------------------------------------- |
+| RL-Insight / Grafana user | Nothing at runtime                                  | Start and use RL-Insight exactly as before                                      |
+| Dashboard developer       | Dashboards are authored as modules + compositions   | Edit the composition registry, add modules only when needed, then generate JSON |
+| Framework contributor     | Only generic composition/rendering behavior changes | See [`framework/README.md`](framework/README.md)                                |
+
+## Before and after
+
+### User behavior
+
+Before:
+
+```text
+RL-Insight startup
+→ Grafana provisioning
+→ committed dashboard JSON
+→ Grafana
+```
+
+After:
+
+```text
+RL-Insight startup
+→ Grafana provisioning
+→ committed dashboard JSON
+→ Grafana
+```
+
+There is **no runtime behavior change**.
+
+Grafana does not execute Jsonnet. `gojsonnet` is only used during dashboard
+development and generation.
+
+### Dashboard development
+
+Before:
+
+```text
+copy / edit a complete Grafana JSON
+→ repeat common changes across dashboard variants
+```
+
+After:
+
+```text
+reuse modules
+→ define a composition
+→ generate
+→ verify
+→ commit JSON
+```
 
 ## Architecture
 
+```text
+dashboards/*.libsonnet
+        │
+        │ reusable panels / rows / variables
+        ▼
+dashboard_compositions.libsonnet
+        │
+        │ defines which modules make up each dashboard
+        ▼
+dashboards.jsonnet
+        │
+        ▼
+framework/composer.libsonnet
+        │
+        ▼
+generate_dashboards.py
+        │
+        ▼
+rl_insight/config/services/grafana/dashboards/verl/*.json
+        │
+        ▼
+Grafana provisioning
 ```
-semantic modules (dashboards/*.libsonnet)
-        │  panels / rows / variables / variables-selectors, plain data
-        ▼
-dashboard_compositions.libsonnet        ← the single composition registry
-        │  per dashboard: aggregate `modules` list + `dashboard` config
-        ▼
-dashboards.jsonnet                      ← thin stable entrypoint
-        │  composer.compose(modules, dashboard) for every registry entry
-        ▼
-generate_dashboards.py                  ← thin render wrapper
-        │  reuses framework/generate.py core (engine + deterministic JSON)
-        ▼
-rl_insight/config/services/grafana/dashboards/verl/*.json   ← committed JSON
-        ▼
-Grafana provisioning reads the committed JSON at startup
+
+For normal dashboard development, the main entry point is:
+
+```text
+tools/grafana/dashboard_compositions.libsonnet
 ```
 
-Runtime never executes Jsonnet: `rl-insight` startup only stages and serves
-the committed JSON through Grafana provisioning. Jsonnet and go-jsonnet are
-development/generation-time tools only; users start and use the service
-exactly as before.
+If you want to define which modules make up a production dashboard, this is
+the file you normally edit.
 
-## Current compositions
+Do not add dashboard-specific logic to `composer.libsonnet`.
 
-Both live in `dashboard_compositions.libsonnet` and keep their historical
-output filenames (`tainer` spelling is intentional):
+## Reusable modules
 
-| registry entry | modules | dashboard title |
-| -------------- | ------- | --------------- |
-| `verl_tainer_v1_with_vllm_engine` | `verlBase + [vllm, npu]` where `verlBase = [trainer, controller, storage, trajectory]` | `verl_trainer_v1_with_vllm_engine` |
-| `verl_tainer_v1_with_sglang_engine` | `verlBase + [sglang]` | `verl_trainer_v1_with_sglang_engine` |
+| Module       | Responsibility                                                                   |
+| ------------ | -------------------------------------------------------------------------------- |
+| `trainer`    | Training metrics: actor, critic, reward, loss, rollout, throughput, timing, etc. |
+| `controller` | Controller / orchestration / transfer-queue control metrics                      |
+| `storage`    | Partition, storage, and data-transfer metrics                                    |
+| `trajectory` | Tempo / TraceQL state timeline                                                   |
+| `vllm`       | vLLM inference and host-side metrics                                             |
+| `sglang`     | SGLang inference metrics                                                         |
+| `npu`        | Ascend NPU metrics                                                               |
 
-The shared `verlBase` modules carry the trainer-side content (116 panels);
-the engine module adds its engine-specific rows, and `npu` the optional NPU
-hardware panels used only by the vLLM composition.
+The shared VERL base is:
 
-## Adding a new dashboard ("Foo")
+```text
+verlBase
+= trainer
++ controller
++ storage
++ trajectory
+```
 
-1. Write `dashboards/foo.libsonnet` with the module schema from the framework
-   README (`panels` required; `rows`/`variables`/`tags` optional).
-2. Import it in `dashboard_compositions.libsonnet` and add one registry entry
-   with `modules` + `dashboard` (metadata, title, tags, spec, `variableOrder`,
-   `rowOrder`).
-3. Render and commit the JSON (below). Do **not** modify `composer.libsonnet`,
-   `viz.libsonnet`, the framework generator, or `dashboards.jsonnet`.
+Current production compositions are:
 
-## Extending a dashboard (`trainer` + `trainer_extra` pattern)
+```text
+vLLM dashboard
+= verlBase + vllm + npu
 
-- A genuinely new row: the extra module owns it via `rows`.
-- One more panel inside the existing `training metric` row: the extra module
-  lists the panel under `panels` and appends it with
-  [`rowItems`](framework/README.md) targeting `training metric` — additive
-  only, the base module stays untouched.
-- Do not commit placeholder modules; add real content or nothing.
+SGLang dashboard
+= verlBase + sglang
+```
 
-## Generating and verifying
+## Add a new dashboard
+
+### Reuse existing modules only
+
+If a new dashboard only needs existing content, no new module is required.
+
+For example:
+
+```text
+trainer + trajectory + npu
+```
+
+Only add a new entry in:
+
+```text
+tools/grafana/dashboard_compositions.libsonnet
+```
+
+Example:
+
+```jsonnet
+my_verl_dashboard: {
+  modules: [
+    trainer,
+    trajectory,
+    npu,
+  ],
+  dashboard: {
+    metadata: {
+      name: 'my-verl-dashboard',
+      labels: {},
+      annotations: {},
+    },
+    title: 'my_verl_dashboard',
+    tags: ['RL-Insight', 'verl'],
+    spec: productionSpec,
+    variableOrder: [
+      'datasource',
+      'project',
+      'experiment_name',
+      'npu_instance',
+    ],
+    rowOrder: [
+      'rl state timeline',
+      'training metric',
+    ],
+  },
+},
+```
+
+Then generate the JSON:
 
 ```bash
-# render every registry entry into the committed directory
 python tools/grafana/generate_dashboards.py
-
-# verify committed JSON matches the registry (semantic check)
-python tools/grafana/generate_dashboards.py --check
-
-# render a custom one-off composition into a scratch directory
-python tools/grafana/framework/generate.py \
-  --config my_composition.jsonnet --out-dir /tmp/out
 ```
 
-`--check` compares parsed JSON objects, so it reports real content drift and
-ignores serialization-only differences. The framework generator's own
-`--check` (`framework/generate.py`) remains byte-exact for framework-owned
-outputs; production equivalence is defined semantically because the committed
-files are large, shared artifacts. Structure checks (panel counts, content
-fingerprints, aggregate uniqueness) live in
-`dashboards/verify_modules.jsonnet`; evaluate it with any Jsonnet runner
-(e.g. `python -c "import _gojsonnet; _gojsonnet.evaluate_file('tools/grafana/dashboards/verify_modules.jsonnet')"`).
+### Add a new engine or new content
+
+If a new engine `foo` has its own panels:
+
+1. Add a module:
+
+```text
+tools/grafana/dashboards/foo.libsonnet
+```
+
+2. Import it in:
+
+```text
+tools/grafana/dashboard_compositions.libsonnet
+```
+
+3. Add a composition:
+
+```jsonnet
+verl_tainer_v1_with_foo_engine: {
+  modules: verlBase + [foo],
+  dashboard: {
+    ...
+  },
+},
+```
+
+4. Generate and verify:
+
+```bash
+python tools/grafana/generate_dashboards.py
+python tools/grafana/generate_dashboards.py --check
+```
+
+Adding a normal engine or dashboard does **not** require changes to
+`composer.libsonnet`, `viz.libsonnet`, `framework/generate.py`, or
+`dashboards.jsonnet`.
+
+## Extend existing content
+
+A dashboard may reuse a base module and add extra content.
+
+For example:
+
+```text
+trainer + trainer_extra
+```
+
+### Add a new row
+
+If the extension adds a completely new section, define it with `rows`.
+
+```jsonnet
+{
+  panels: [
+    ...
+  ],
+  rows: {
+    'custom training metric': {
+      ...
+    },
+  },
+}
+```
+
+### Add a panel to an existing row
+
+If the new panel should appear inside the existing `training metric` row, use
+`rowItems`.
+
+```jsonnet
+{
+  panels: [{
+    key: 'training.custom.foo',
+    outputKey: 'panel-custom-foo',
+    id: 500,
+    title: 'Custom Foo Metric',
+    queries: [{
+      expr: 'custom_foo_metric',
+    }],
+  }],
+
+  rowItems: {
+    'training metric': [{
+      kind: 'GridLayoutItem',
+      spec: {
+        x: 0,
+        y: 100,
+        width: 12,
+        height: 8,
+        element: {
+          kind: 'ElementReference',
+          name: 'training.custom.foo',
+        },
+      },
+    }],
+  },
+}
+```
+
+Then compose both modules:
+
+```jsonnet
+modules: [
+  trainer,
+  trainer_extra,
+  controller,
+  storage,
+  trajectory,
+]
+```
+
+Extensions are additive only. They do not silently override existing panels,
+rows, or variables.
+
+## What should I modify?
+
+| Task                                 | Files normally changed                                            |
+| ------------------------------------ | ----------------------------------------------------------------- |
+| New dashboard using existing modules | `dashboard_compositions.libsonnet`                                |
+| New engine / new content             | new `dashboards/*.libsonnet` + `dashboard_compositions.libsonnet` |
+| Extend existing content              | new extension module + `dashboard_compositions.libsonnet`         |
+| New shared visualization type        | framework change                                                  |
+| New composition behavior             | framework change                                                  |
+
+For ordinary dashboard additions, do not modify the framework.
+
+## Generate and verify
+
+Generate all registered production dashboards:
+
+```bash
+python tools/grafana/generate_dashboards.py
+```
+
+Verify that committed JSON matches the Jsonnet sources:
+
+```bash
+python tools/grafana/generate_dashboards.py --check
+```
+
+Production `--check` compares parsed JSON objects, so serialization-only key
+ordering differences are ignored.
+
+Structural migration checks are also available in:
+
+```text
+tools/grafana/dashboards/verify_modules.jsonnet
+```
+
+## Runtime behavior
+
+Generated JSON remains committed under:
+
+```text
+rl_insight/config/services/grafana/dashboards/verl/
+```
+
+Grafana continues to load those files through the existing provisioning
+configuration.
+
+Existing users do not need to:
+
+- install Jsonnet;
+- run the generator;
+- change startup commands;
+- change Grafana configuration.
+
+Jsonnet is a development-time source format only.
 
 ## Limitations
 
-- Composition is additive only: no implicit overrides, no panel patching
-  across modules, no inheritance. Duplicate panel `key`/`outputKey`/`id`,
-  duplicate owned row/variable names, and unknown `rowOrder`/`variableOrder`
-  entries are composition errors.
-- `rowItems` can only append items to an existing `GridLayout` row; it cannot
-  remove or reorder existing items.
-- Output JSON is generated; hand-edits to the committed files are overwritten
-  by the next render and rejected by `--check`.
+- Composition is additive only; implicit overrides are not supported.
+- `rowItems` only appends items to an existing supported `GridLayout` row.
+- Existing row items cannot be removed or reordered through `rowItems`.
+- Generated production JSON should not be manually maintained; update the
+  source module or composition and regenerate it instead.
+
+For generic composition rules and framework internals, see
+[`framework/README.md`](framework/README.md).
