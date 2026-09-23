@@ -17,6 +17,7 @@
 from __future__ import annotations
 
 import argparse
+from pathlib import Path
 from unittest.mock import MagicMock, call
 
 import pytest
@@ -51,6 +52,14 @@ def test_parser_should_accept_log_dir_for_server_start(tmp_path, flags) -> None:
     assert args.detach == bool(flags)
     assert args.auto_port == bool(flags)
     assert args.func.__name__ == "start"
+
+
+def test_parser_should_accept_relative_extra_dashboard_dir() -> None:
+    args = cli._build_parser().parse_args(
+        ["server", "start", "--extra-dashboard-dir", "relative/dashboards"]
+    )
+
+    assert args.extra_dashboard_dir == Path("relative/dashboards")
 
 
 def test_apply_log_dir_should_override_server_data_dir(tmp_path) -> None:

@@ -105,6 +105,12 @@ def _add_server_parser(subparsers: argparse._SubParsersAction) -> None:
         default=None,
         help="Directory containing persisted RL-Insight data; defaults to ~/.rl-insight/data.",
     )
+    start.add_argument(
+        "--extra-dashboard-dir",
+        type=Path,
+        default=None,
+        help="Directory containing extra Grafana dashboards.",
+    )
     mode_group = start.add_mutually_exclusive_group()
     mode_group.add_argument(
         "--detach",

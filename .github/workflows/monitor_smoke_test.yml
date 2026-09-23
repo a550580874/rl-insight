@@ -116,6 +116,30 @@ jobs:
         if: runner.os == 'Linux'
         run: python tests/monitor/test_monitor_stress.py
 
+      - name: Verify external dashboard is loaded
+        env:
+          GF_AUTH_ANONYMOUS_ENABLED: "true"
+        run: |
+          rl-insight server stop
+          rl-insight server start \
+            --extra-dashboard-dir tests/monitor/special_e2e/fixtures/dashboards \
+            --detach
+          pytest -s -v \
+            tests/monitor/special_e2e/test_external_dashboard.py::test_external_dashboard_should_be_loaded_by_grafana
+
+      - name: Verify removed external dashboard is deleted
+        env:
+          GF_AUTH_ANONYMOUS_ENABLED: "true"
+          RL_INSIGHT_EXPECT_ROUTER_DASHBOARD_ABSENT: "1"
+        run: |
+          rl-insight server stop
+          rm tests/monitor/special_e2e/fixtures/dashboards/uni_agent_router.json
+          rl-insight server start \
+            --extra-dashboard-dir tests/monitor/special_e2e/fixtures/dashboards \
+            --detach
+          pytest -s -v \
+            tests/monitor/special_e2e/test_external_dashboard.py::test_removed_external_dashboard_should_disappear
+
       - name: Stop server stack
         if: always()
         run: |

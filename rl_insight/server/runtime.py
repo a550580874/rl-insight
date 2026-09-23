@@ -924,9 +924,47 @@ def _stage_grafana_dashboards(conf: DictConfig, runtime_dir: Path) -> Path:
     source = Path(str(OmegaConf.select(conf, "grafana.dashboards_dir"))).resolve()
     target = (runtime_dir / "dashboards").resolve()
     target.mkdir(parents=True, exist_ok=True)
-    if source == target or not source.exists():
+    if source != target and source.exists():
+        shutil.rmtree(target)
+        target.mkdir(parents=True)
+        _copy_dashboard_directory(source, target)
+
+    extra = OmegaConf.select(conf, "grafana.extra_dashboard_dir")
+    if extra is None:
         return target
 
+    planned_json = {
+        path.relative_to(target)
+        for path in target.rglob("*")
+        if path.is_file() and path.suffix.casefold() == ".json"
+    }
+    extra_source = Path(str(extra)).resolve()
+    if extra_source == target:
+        return target
+    if not extra_source.exists():
+        raise RuntimeError(
+            f"Extra Grafana dashboard directory {str(extra_source)!r} does not exist."
+        )
+    if not extra_source.is_dir():
+        raise RuntimeError(
+            f"Extra Grafana dashboard path {str(extra_source)!r} is not a directory."
+        )
+    for path in extra_source.rglob("*"):
+        if not path.is_file() or path.suffix.casefold() != ".json":
+            continue
+        relative_path = path.relative_to(extra_source)
+        if relative_path in planned_json:
+            raise RuntimeError(
+                f"Grafana dashboard {relative_path.as_posix()!r} from extra "
+                f"source {str(extra_source)!r} already exists in runtime dashboards."
+            )
+        planned_json.add(relative_path)
+
+    _copy_dashboard_directory(extra_source, target)
+    return target
+
+
+def _copy_dashboard_directory(source: Path, target: Path) -> None:
     for item in source.iterdir():
         destination = target / item.name
         if item.is_file():
@@ -937,16 +975,6 @@ def _stage_grafana_dashboards(conf: DictConfig, runtime_dir: Path) -> Path:
             if destination.exists() and not destination.is_dir():
                 destination.unlink()
             shutil.copytree(item, destination, dirs_exist_ok=True)
-
-    source_names = {item.name for item in source.iterdir()}
-    for item in list(target.iterdir()):
-        if item.name in source_names:
-            continue
-        if item.is_file():
-            item.unlink()
-        else:
-            shutil.rmtree(item)
-    return target
 
 
 def _service_specific_data_dir(conf: DictConfig, name: str, data_root: Path) -> Path:

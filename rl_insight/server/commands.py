@@ -101,6 +101,14 @@ class ServerCommands:
     def start(self, args: argparse.Namespace) -> int:
         """Start local RL-Insight server, Prometheus, Tempo, and Grafana processes."""
         conf = self._load_config(args)
+        extra_dashboard_dir = getattr(args, "extra_dashboard_dir", None)
+        if extra_dashboard_dir is not None:
+            OmegaConf.update(
+                conf,
+                "grafana.extra_dashboard_dir",
+                str(extra_dashboard_dir.expanduser().resolve()),
+                force_add=True,
+            )
         log_dir = getattr(args, "log_dir", None)
         if log_dir is not None:
             self._apply_log_dir(conf, log_dir)
