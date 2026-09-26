@@ -1,5 +1,7 @@
 # Grafana dashboard development
 
+> **简体中文版本: [README.zh-CN.md](README.zh-CN.md)**
+
 Grafana dashboards are maintained as reusable Jsonnet modules and composed into
 the committed Grafana JSON files used by RL-Insight.
 
