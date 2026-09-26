@@ -19,6 +19,7 @@ For offline Recipe utilities, see the
    :caption: Monitor
 
    Quick Start <monitor/quick_start>
+   Custom Grafana Dashboards <monitor/custom_dashboards>
    Agent Loop Protocol <monitor/agent_loop_protocol>
    Server Installation <monitor/server_installation>
    Data Directory Migration <monitor/data_migration>

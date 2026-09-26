@@ -95,10 +95,21 @@ def _add_server_parser(subparsers: argparse._SubParsersAction) -> None:
     )
     _add_common_config_args(start)
     start.add_argument(
+        "--auto-port",
+        action="store_true",
+        help="Keep available configured ports and automatically replace occupied ports.",
+    )
+    start.add_argument(
         "--log-dir",
         type=Path,
         default=None,
         help="Directory containing persisted RL-Insight data; defaults to ~/.rl-insight/data.",
+    )
+    start.add_argument(
+        "--extra-dashboard-dir",
+        type=Path,
+        default=None,
+        help="Directory containing extra Grafana dashboards.",
     )
     mode_group = start.add_mutually_exclusive_group()
     mode_group.add_argument(
