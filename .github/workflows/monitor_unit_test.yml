@@ -15,6 +15,8 @@ on:
       - "pyproject.toml"
       - "rl_insight/client/**"
       - "rl_insight/collector/**"
+      - "rl_insight/grafana/**"
+      - "rl_insight/config/services/grafana/**"
       - "rl_insight/utils/**"
       - "tests/monitor/ut/**"
       - ".github/workflows/monitor_unit_test.yml"
@@ -45,15 +47,6 @@ jobs:
 
       - name: Install monitor test dependencies
         run: pip install -e ".[test]"
-
-      # gojsonnet publishes no Windows wheels, so the pip dependency is
-      # skipped there; the monitor framework tests use the identical
-      # go-jsonnet engine through its CLI instead.
-      - name: Install Jsonnet CLI on Windows
-        if: runner.os == 'Windows'
-        run: |
-          go install github.com/google/go-jsonnet/cmd/jsonnet@v0.22.0
-          "$(go env GOPATH)\bin" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
 
       - name: Run monitor unit tests
         run: pytest -s -x tests/monitor/ut

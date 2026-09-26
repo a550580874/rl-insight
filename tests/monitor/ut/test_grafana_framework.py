@@ -14,24 +14,34 @@
 
 """Tests for the generic Grafana dashboard composition framework.
 
-The framework lives under ``tools/grafana/framework`` and is independent of
-any production dashboard or committed fixture: every test renders a minimal
-composition config that the test writes into ``tmp_path``.
+The framework is independent of any production dashboard or committed fixture:
+every test renders a minimal composition config that the test writes into
+``tmp_path``.
+
+Rendering goes through the installed-package core,
+``rl_insight.grafana.renderer``. The optional CLI in
+``tools/grafana/framework/generate.py`` is covered separately, only to prove it
+is a thin wrapper over that same core.
 """
 
 from __future__ import annotations
 
 import json
+import shutil
 import subprocess
 import sys
 from pathlib import Path
 
 import pytest
 
+from rl_insight.grafana import renderer
+
 REPO_ROOT = Path(__file__).resolve().parents[3]
-FRAMEWORK = REPO_ROOT / "tools" / "grafana" / "framework"
-GENERATE = FRAMEWORK / "generate.py"
-COMPOSER = FRAMEWORK / "composer.libsonnet"
+GENERATE = REPO_ROOT / "tools" / "grafana" / "framework" / "generate.py"
+
+#: The generic Jsonnet assets that must ship inside the installed package.
+FRAMEWORK_DIR = renderer.FRAMEWORK_DIR
+COMPOSER = FRAMEWORK_DIR / "composer.libsonnet"
 
 
 def run_generate(*args: str, expect: int = 0) -> subprocess.CompletedProcess[str]:
@@ -135,7 +145,8 @@ def compose_config(
 
 
 def render(tmp_path: Path, config: Path, out: str) -> dict:
-    run_generate("--config", str(config), "--out-dir", str(tmp_path / out))
+    """Render through the package core and read the composed dashboard back."""
+    renderer.materialize_dashboards(config, tmp_path / out)
     path = tmp_path / out / "compose.json"
     return json.loads(path.read_text(encoding="utf-8"))
 
@@ -188,9 +199,8 @@ FULL_DASHBOARD = DASHBOARD % ("['zone_m1']", "['m1-row', 'm2-row']")
 
 def test_render_is_byte_deterministic(tmp_path: Path) -> None:
     config = compose_config(tmp_path, TWO_MODULES, FULL_DASHBOARD)
-    command = ["--config", str(config)]
-    run_generate(*command, "--out-dir", str(tmp_path / "run1"))
-    run_generate(*command, "--out-dir", str(tmp_path / "run2"))
+    renderer.materialize_dashboards(config, tmp_path / "run1")
+    renderer.materialize_dashboards(config, tmp_path / "run2")
     first = (tmp_path / "run1" / "compose.json").read_bytes()
     assert first == (tmp_path / "run2" / "compose.json").read_bytes()
     composed = json.loads(first)["spec"]
@@ -202,34 +212,99 @@ def test_render_is_byte_deterministic(tmp_path: Path) -> None:
 
 def test_check_mode_passes_when_in_sync(tmp_path: Path) -> None:
     config = compose_config(tmp_path, TWO_MODULES, FULL_DASHBOARD)
-    run_generate("--config", str(config), "--out-dir", str(tmp_path / "expected"))
-    run_generate(
-        "--config",
-        str(config),
-        "--check",
-        "--expected-dir",
-        str(tmp_path / "expected"),
-    )
+    renderer.materialize_dashboards(config, tmp_path / "expected")
+    assert renderer.stale_dashboards(config, tmp_path / "expected") == []
 
 
 def test_check_mode_detects_stale_expected_output(tmp_path: Path) -> None:
     config = compose_config(tmp_path, TWO_MODULES, FULL_DASHBOARD)
     expected_dir = tmp_path / "expected"
-    run_generate("--config", str(config), "--out-dir", str(expected_dir))
+    renderer.materialize_dashboards(config, expected_dir)
     stale = json.loads((expected_dir / "compose.json").read_text(encoding="utf-8"))
     stale["spec"]["title"] = "tampered"
     (expected_dir / "compose.json").write_text(
         json.dumps(stale, ensure_ascii=False, indent=2) + "\n", encoding="utf-8"
     )
-    proc = run_generate(
-        "--config",
-        str(config),
-        "--check",
-        "--expected-dir",
-        str(expected_dir),
-        expect=1,
+    assert renderer.stale_dashboards(config, expected_dir) == [
+        expected_dir / "compose.json"
+    ]
+
+
+def test_materialize_writes_every_dashboard_and_creates_the_output_dir(
+    tmp_path: Path,
+) -> None:
+    config = write_config(
+        tmp_path,
+        module_source("m1", 1)
+        + module_source("m2", 2)
+        + "local composer = import '"
+        + COMPOSER.as_posix()
+        + "';\n"
+        "{\n"
+        "  first: composer.compose([m1], "
+        + DASHBOARD
+        % ("['zone_m1']", "['m1-row']")
+        + "),\n"
+        "  second: composer.compose([m2], "
+        + DASHBOARD
+        % ("['zone_m2']", "['m2-row']")
+        + "),\n"
+        "}\n",
     )
-    assert "compose.json" in proc.stderr
+    output_dir = tmp_path / "nested" / "out"
+    written = renderer.materialize_dashboards(config, output_dir)
+    assert written == [output_dir / "first.json", output_dir / "second.json"]
+    for path in written:
+        assert json.loads(path.read_text(encoding="utf-8"))["spec"]["title"] == (
+            "Toy dashboard"
+        )
+
+
+def test_evaluation_failure_names_the_config_and_the_jsonnet_context(
+    tmp_path: Path,
+) -> None:
+    config = write_config(tmp_path, "{ compose: error 'toy composition failure' }\n")
+    with pytest.raises(renderer.JsonnetRenderError) as excinfo:
+        renderer.render_dashboards(config)
+    message = str(excinfo.value)
+    assert str(config) in message
+    assert "runtime error: toy composition failure" in message
+
+
+def test_missing_config_is_rejected_with_its_path(tmp_path: Path) -> None:
+    missing = tmp_path / "absent.jsonnet"
+    with pytest.raises(renderer.JsonnetRenderError) as excinfo:
+        renderer.render_dashboards(missing)
+    assert str(missing) in str(excinfo.value)
+
+
+def test_rendering_never_shells_out(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # The core must evaluate in-process: no Jsonnet CLI, no subprocess, no
+    # gojsonnet binding. Break every escape hatch and render anyway.
+    config = compose_config(tmp_path, TWO_MODULES, FULL_DASHBOARD)
+    source = Path(renderer.__file__).read_text(encoding="utf-8")
+    assert "subprocess" not in source
+    assert "gojsonnet" not in source
+
+    def explode(*args: object, **kwargs: object) -> None:
+        raise AssertionError("the renderer must not spawn a subprocess")
+
+    monkeypatch.setattr(subprocess, "run", explode)
+    monkeypatch.setattr(subprocess, "Popen", explode)
+    monkeypatch.setattr(shutil, "which", lambda name: None)
+    assert set(renderer.render_dashboards(config)) == {"compose"}
+
+
+def test_framework_assets_ship_inside_the_installed_package() -> None:
+    assert FRAMEWORK_DIR.is_dir()
+    for name in ("composer.libsonnet", "viz.libsonnet"):
+        assert (FRAMEWORK_DIR / name).is_file()
+    # No second copy of the framework outside the package.
+    assert not (
+        REPO_ROOT / "tools" / "grafana" / "framework" / "composer.libsonnet"
+    ).exists()
 
 
 def test_layout_references_resolve_across_modules(tmp_path: Path) -> None:
@@ -273,30 +348,27 @@ def test_composition_conflicts_are_rejected(
         DASHBOARD % ("['zone_m1']", "['m1-row']"),
         replacements=replacements,
     )
-    proc = run_generate(
-        "--config", str(config), "--out-dir", str(tmp_path / "out"), expect=2
-    )
-    assert expected_error in proc.stderr
+    with pytest.raises(renderer.JsonnetRenderError) as excinfo:
+        renderer.render_dashboards(config)
+    assert expected_error in str(excinfo.value)
 
 
 def test_unknown_variable_in_variable_order_is_rejected(tmp_path: Path) -> None:
     config = compose_config(
         tmp_path, TWO_MODULES, DASHBOARD % ("['zone_m1', 'missing_var']", "['m1-row']")
     )
-    proc = run_generate(
-        "--config", str(config), "--out-dir", str(tmp_path / "out"), expect=2
-    )
-    assert "unknown variable(s) in variableOrder: missing_var" in proc.stderr
+    with pytest.raises(renderer.JsonnetRenderError) as excinfo:
+        renderer.render_dashboards(config)
+    assert "unknown variable(s) in variableOrder: missing_var" in str(excinfo.value)
 
 
 def test_unknown_row_in_row_order_is_rejected(tmp_path: Path) -> None:
     config = compose_config(
         tmp_path, TWO_MODULES, DASHBOARD % ("['zone_m1']", "['m1-row', 'missing_row']")
     )
-    proc = run_generate(
-        "--config", str(config), "--out-dir", str(tmp_path / "out"), expect=2
-    )
-    assert "unknown row(s) in rowOrder: missing_row" in proc.stderr
+    with pytest.raises(renderer.JsonnetRenderError) as excinfo:
+        renderer.render_dashboards(config)
+    assert "unknown row(s) in rowOrder: missing_row" in str(excinfo.value)
 
 
 def test_composition_order_decides_tag_sequence(tmp_path: Path) -> None:
@@ -415,10 +487,9 @@ def test_row_items_unknown_target_is_rejected(tmp_path: Path) -> None:
         + ") }\n"
     )
     config = write_config(tmp_path, body)
-    proc = run_generate(
-        "--config", str(config), "--out-dir", str(tmp_path / "out"), expect=2
-    )
-    assert "unknown row extension target: missing-row" in proc.stderr
+    with pytest.raises(renderer.JsonnetRenderError) as excinfo:
+        renderer.render_dashboards(config)
+    assert "unknown row extension target: missing-row" in str(excinfo.value)
 
 
 def test_row_items_unsupported_target_is_rejected(tmp_path: Path) -> None:
@@ -435,7 +506,42 @@ def test_row_items_unsupported_target_is_rejected(tmp_path: Path) -> None:
         + ") }\n"
     )
     config = write_config(tmp_path, body)
+    with pytest.raises(renderer.JsonnetRenderError) as excinfo:
+        renderer.render_dashboards(config)
+    assert "unsupported row extension target" in str(excinfo.value)
+
+
+def test_cli_writes_exactly_what_the_core_renders(tmp_path: Path) -> None:
+    config = compose_config(tmp_path, TWO_MODULES, FULL_DASHBOARD)
+    cli_out = tmp_path / "cli-out"
+    run_generate("--config", str(config), "--out-dir", str(cli_out))
+    expected = renderer.generated_text(renderer.render_dashboards(config)["compose"])
+    assert (cli_out / "compose.json").read_text(encoding="utf-8") == expected
+
+
+def test_cli_check_matches_the_core_and_reports_stale_files(tmp_path: Path) -> None:
+    config = compose_config(tmp_path, TWO_MODULES, FULL_DASHBOARD)
+    expected_dir = tmp_path / "expected"
+    run_generate("--config", str(config), "--out-dir", str(expected_dir))
+    run_generate(
+        "--config", str(config), "--check", "--expected-dir", str(expected_dir)
+    )
+    (expected_dir / "compose.json").write_text("{}\n", encoding="utf-8")
+    proc = run_generate(
+        "--config",
+        str(config),
+        "--check",
+        "--expected-dir",
+        str(expected_dir),
+        expect=1,
+    )
+    assert "compose.json" in proc.stderr
+
+
+def test_cli_reports_evaluation_failures_with_the_config_path(tmp_path: Path) -> None:
+    config = write_config(tmp_path, "{ compose: error 'toy composition failure' }\n")
     proc = run_generate(
         "--config", str(config), "--out-dir", str(tmp_path / "out"), expect=2
     )
-    assert "unsupported row extension target" in proc.stderr
+    assert str(config) in proc.stderr
+    assert "runtime error: toy composition failure" in proc.stderr

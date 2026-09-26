@@ -2,10 +2,15 @@
 
 A minimal, generic framework for building Grafana dashboards as Jsonnet code:
 a **composer** that combines small dashboard modules into one dashboard, and a
-**generator** that renders the result to deterministic JSON. The framework
+**renderer** that evaluates the result into deterministic JSON. The framework
 knows nothing about any concrete dashboard (no engine names, no metric names,
 no production paths) and ships no fixtures — every behavior below is exercised
 by tests that build their inputs in temporary directories.
+
+This document is for **framework contributors**. It covers the module schema,
+the composer, `rowItems`, the visualization defaults, the renderer API, the
+optional CLI and the tests. Authors who only want to add or extend a dashboard
+should read the dashboard-development guide instead.
 
 ## Motivation
 
@@ -21,14 +26,25 @@ longer matches the sources.
 
 ## Architecture
 
+The runtime pieces live inside the installed `rl_insight` package, so a wheel
+carries everything needed to render — no Jsonnet CLI, no Go toolchain, no
+compiler, and no second copy of the framework:
+
 ```
-tools/grafana/framework/
+rl_insight/grafana/renderer.py                 # runtime core: evaluate + serialize
+rl_insight/config/services/grafana/jsonnet/framework/
 ├── composer.libsonnet   # panel/row/variable machinery + compose()
-├── viz.libsonnet        # shared Grafana visualization defaults
-├── generate.py          # CLI: --config/--out-dir/--check
-└── README.md
+└── viz.libsonnet        # shared Grafana visualization defaults
+tools/grafana/framework/
+├── generate.py          # optional thin CLI over the package core
+└── README.md            # this file
 tests/monitor/ut/test_grafana_framework.py
 ```
+
+`rl_insight.grafana.renderer` is the single implementation of evaluation and
+serialization. `tools/grafana/framework/generate.py` adds argument parsing and
+exit codes only — it imports the core and never re-implements the evaluator,
+shells out to a Jsonnet CLI, or invokes another Python entry point.
 
 Modules and composition configs are plain data; `composer.compose(modules,
 dashboard)` renders one Grafana Dashboard v2 resource. The composer contains
@@ -132,7 +148,7 @@ rows via `rowItems`. Both files stay generic — this example uses an
 }
 
 // dashboards/my-service.jsonnet
-local composer = import 'tools/grafana/framework/composer.libsonnet';
+local composer = import 'rl_insight/config/services/grafana/jsonnet/framework/composer.libsonnet';
 local overview = import 'modules/overview.libsonnet';
 local overview_extra = import 'modules/overview_extra.libsonnet';
 
@@ -154,7 +170,49 @@ composition order — and adding another panel to an existing dashboard is a
 new extension module plus one entry in the config's module list, never a
 change to the base module.
 
-## Generator
+## Renderer
+
+The core API lives in `rl_insight.grafana.renderer` (also re-exported from
+`rl_insight.grafana`):
+
+| function                                       | purpose                                                            |
+| ---------------------------------------------- | ------------------------------------------------------------------ |
+| `render_dashboards(config) -> dict`            | evaluate the config and return `{ "<dashboard-name>": <dashboard> }` |
+| `generated_text(dashboard) -> str`             | deterministic serialization of one dashboard                       |
+| `materialize_dashboards(config, output_dir)`   | render and write one `<dashboard-name>.json` per dashboard         |
+| `stale_dashboards(config, expected_dir)`       | the expected files that are missing or differ byte-for-byte        |
+| `FRAMEWORK_DIR`                                | package path holding `composer.libsonnet` and `viz.libsonnet`      |
+
+```python
+from rl_insight.grafana import renderer
+
+dashboards = renderer.render_dashboards("dashboards/my-service.jsonnet")
+renderer.materialize_dashboards("dashboards/my-service.jsonnet", "/tmp/out")
+assert renderer.stale_dashboards("dashboards/my-service.jsonnet", "dashboards/expected") == []
+```
+
+A composition config evaluates to `{ "<dashboard-name>": <dashboard resource> }`
+where each resource is the object returned by `composer.compose(...)`; the
+renderer writes one JSON file per name. Output is deterministic: the composer
+emits object fields in sorted order and `generated_text` uses fixed
+indentation, so re-running over unchanged sources is byte-identical.
+
+Evaluation happens **in-process** through the [`rjsonnet`][rjsonnet] binding, a
+base runtime dependency of `rl-insight`. `rjsonnet` publishes CPython ABI3
+wheels for Windows (x86/x64), macOS (x86_64/arm64/universal2) and the common
+Linux glibc/musl architectures, so installing `rl-insight` is enough on every
+platform: no `jsonnet` CLI, no `go install`, and no compiler step. Evaluation
+failures raise `renderer.JsonnetRenderError`, whose message names the config
+path and keeps the Jsonnet stack trace.
+
+[rjsonnet]: https://pypi.org/project/rjsonnet/
+
+## Optional CLI
+
+`tools/grafana/framework/generate.py` is a convenience wrapper for shell use.
+It parses arguments, calls the package core and maps the result to an exit
+code; it renders exactly the bytes `render_dashboards` /
+`materialize_dashboards` produce.
 
 ```bash
 # render: writes <dashboard-name>.json into the output directory
@@ -167,47 +225,37 @@ python tools/grafana/framework/generate.py \
   --check --expected-dir dashboards/expected
 ```
 
-A composition config evaluates to `{ "<dashboard-name>": <dashboard resource> }`
-where each resource is the object returned by `composer.compose(...)`; the
-generator writes one JSON file per name. Output is deterministic: go-jsonnet
-emits object fields in sorted order and the writer uses fixed indentation, so
-re-running over unchanged sources is byte-identical. The generator uses the
-`gojsonnet` Python binding (0.22.0, the go-jsonnet evaluation engine) when it
-is importable and otherwise falls back to the same engine's `jsonnet` CLI.
-That fallback matters on Windows, where gojsonnet publishes no wheels: the
-test extra marks the binding `platform_system != 'Windows'`, and the monitor
-unit-test workflow installs the CLI via
-`go install github.com/google/go-jsonnet/cmd/jsonnet@v0.22.0` instead, so the
-framework tests run with the same engine version and identical output on every
-platform. Both paths come together through `pyproject.toml` and the monitor
-unit-test workflow (the only modifications of existing files in this change).
+Exit codes: `0` success, `1` `--check` found stale files, `2` the config could
+not be rendered. The CLI is optional — library callers use the renderer
+directly, and nothing in the runtime path depends on it.
 
 ## Developer workflow
 
 1. Write (or reuse) modules; decide which module owns each row.
 2. List the modules in a composition config and pick `variableOrder` /
    `rowOrder` there.
-3. Render with the generator and commit the JSON next to the config.
+3. Render through the renderer (or the optional CLI) and commit the JSON next
+   to the config.
 4. Keep expected files in sync with sources — CI's `--check` run fails on any
    drift, and the tests reject duplicate names, unresolved ordering
    references, bad extension targets, and non-deterministic output.
 
 ## Testing
 
-- `pytest tests/monitor/ut/test_grafana_framework.py` — 17 tests covering byte
-  determinism, check-mode pass/stale-detection, every composition and conflict
-  rule (duplicate panel `key`/`outputKey`/`id`, duplicate owned row/variable
-  names, unresolved `variableOrder`/`rowOrder` entries), cross-module
-  reference resolution, composition-order/variable-order semantics, and the
-  `rowItems` extension rules (single extension, multiple extensions in
-  composition order, unknown target, non-GridLayout target, panels +
-  `rowItems` without owned rows). All tests build their Jsonnet inputs and
-  expected outputs in `tmp_path`; no fixture JSON is committed.
-- The existing suite keeps running unchanged: this change does not touch any
-  production dashboard or the production generator. CI picks the tests up via
-  the `tests/monitor/ut/**` path filter in `monitor_unit_test.yml`, which
-  gains one Windows-only step installing the `jsonnet` CLI (gojsonnet ships
-  no Windows wheels; see Generator).
+- `pytest tests/monitor/ut/test_grafana_framework.py` — 25 tests. Rendering
+  goes through the installed-package core; the optional CLI is covered
+  separately, only to prove it is a thin wrapper (same bytes, same exit codes).
+  Coverage includes byte determinism, materialization into a fresh output
+  directory, check-mode pass/stale-detection, evaluator failures naming the
+  config path and the Jsonnet context, a missing config, the absence of any
+  subprocess/CLI dependency, the packaged `.libsonnet` assets, every
+  composition and conflict rule (duplicate panel `key`/`outputKey`/`id`,
+  duplicate owned row/variable names, unresolved `variableOrder`/`rowOrder`
+  entries), cross-module reference resolution, composition-order/variable-order
+  semantics, and the `rowItems` extension rules (single extension, multiple
+  extensions in composition order, unknown target, non-GridLayout target,
+  panels + `rowItems` without owned rows). All tests build their Jsonnet inputs
+  and expected outputs in `tmp_path`; no fixture JSON is committed.
 - `pre-commit run --all-files` covers license headers, formatting, and compile
   checks.
 
