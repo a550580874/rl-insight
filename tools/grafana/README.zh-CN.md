@@ -6,44 +6,46 @@ RL-Insight 的 Grafana dashboard 以可复用的 Jsonnet 模块维护，并被�
 
 ## 架构
 
-这条链路分为两半：开发期（源文件 → 生成器 → 已提交 JSON）和运行时（启动 → provisioning → Grafana）。下面每一段箭头都写明下一步实际做了什么。
+开发期的一半是开发者执行的一条命令（wrapper → 框架核心 → Jsonnet 入口 → 已提交 JSON）；运行时的一半是运行中的服务所做的事（启动 → 暂存 → provisioning → Grafana）。下面每一段箭头都写明下一步实际做了什么。
 
 ```text
-tools/grafana/dashboards/*.libsonnet
-    可复用内容模块：每个子系统一份 panels / rows / variables
+开发者执行：python tools/grafana/generate_dashboards.py
         │
-        │ IMPORTED BY（被谁导入）—— composition registry 导入它需要的模块
+        │ CALLS（调用）—— 生产薄封装调用框架核心
+        │ tools/grafana/framework/generate.py 里的 render()，
+        │ 并把 Jsonnet 入口 tools/grafana/dashboards.jsonnet 传给它
         ▼
-tools/grafana/dashboard_compositions.libsonnet
-    composition registry：每个 dashboard 由哪些模块组成
+render(tools/grafana/dashboards.jsonnet)
         │
-        │ READ BY（被谁读取）—— dashboards.jsonnet 读取这里注册的每一个 composition
+        │ EVALUATES WITH go-jsonnet（用 go-jsonnet 求值）—— 生成器求值的文件
+        │ 就是入口 tools/grafana/dashboards.jsonnet
         ▼
-tools/grafana/dashboards.jsonnet
-    薄入口：组合所有已注册的 composition
+tools/grafana/dashboards.jsonnet  （生成器的 Jsonnet 入口）
+    导入 registry：tools/grafana/dashboard_compositions.libsonnet，
+    后者再导入可复用模块 tools/grafana/dashboards/*.libsonnet
+    导入组合库：tools/grafana/framework/composer.libsonnet，
+    它是这个入口调用到的库——不是生成器之前的一个独立顺序节点
         │
-        │ COMPOSED BY（被谁组合）—— composer.compose(modules, dashboard)
-        │ 把选中的模块合并成一个完整的 dashboard 对象
+        │ COMPOSES（组合）—— 入口对每一个已注册的 composition 调用
+        │ composer.compose(modules, dashboard)，把选中的模块合并成
+        │ 一个完整的 dashboard 对象
         ▼
-tools/grafana/framework/composer.libsonnet
+{ "<composition-name>": <完整的 dashboard 对象>, ... }
         │
-        │ RENDERED BY（被谁渲染）—— 生成器用 go-jsonnet 对该 Jsonnet 求值，
-        │ 并把结果序列化为 JSON 文本
+        │ SERIALIZED BY（被谁序列化）—— 薄封装用框架核心的 generated_text()
+        │ 把每个对象序列化并写出
         ▼
-tools/grafana/generate_dashboards.py
-        │
-        │ WRITTEN TO（写入到哪里）—— 每个已注册 dashboard 一个 <composition-name>.json
-        ▼
-rl_insight/config/services/grafana/dashboards/verl/*.json
+rl_insight/config/services/grafana/dashboards/verl/<composition-name>.json
     生成好的生产 dashboard，已提交到仓库
         │
         │ COPIED AT STARTUP BY（启动时被谁复制）—— rl_insight/server/runtime.py
-        │ 的 _stage_grafana_dashboards() 把这些文件复制到运行时目录
+        │ 的 _stage_grafana_dashboards() 复制这些已提交的文件
         ▼
-<runtime_dir>/dashboards
+<runtime_dir>/dashboards/<composition-name>.json  （运行时暂存副本）
         │
-        │ LOADED BY（被谁加载）—— Grafana 读取 _render_grafana_provisioning()
-        │ 写出的 provisioning 文件，该文件指向这个目录
+        │ POINTED AT BY（被谁指向）—— _render_grafana_provisioning() 写出
+        │ provisioning/dashboards/default.yml，其 file provider 把
+        │ options.path 设为 <runtime_dir>/dashboards
         ▼
 Grafana
     实际加载并展示 dashboard 的服务
@@ -51,12 +53,12 @@ Grafana
 
 同一条链路用文字说明：
 
-1. **选择（Select）** —— `dashboard_compositions.libsonnet` 导入可复用模块，并逐个 dashboard 记录它由哪些模块组成。
-2. **组合（Compose）** —— `dashboards.jsonnet` 对每个注册项调用 `composer.compose(modules, dashboard)`，把选中的模块合并成一个完整的 dashboard 对象。
-3. **渲染（Render）** —— `generate_dashboards.py` 用 go-jsonnet 对该 Jsonnet 求值，并以确定性方式序列化结果。
-4. **写入（Write）** —— 生成器把每个已注册 dashboard 写成 `rl_insight/config/services/grafana/dashboards/verl/` 下的一个 `<composition-name>.json`；这些文件会被提交。
-5. **启动时复制（Copy at startup）** —— `rl_insight/server/runtime.py:prepare_files()` 调用 `_stage_grafana_dashboards()`，把已提交的 JSON 复制到运行时目录。
-6. **加载（Load）** —— Grafana 读取 `_render_grafana_provisioning()` 写出的 provisioning 文件，并从它指向的目录加载 dashboard。
+1. **调用（Invoke）** —— 开发者执行 `python tools/grafana/generate_dashboards.py`。薄封装调用框架核心 `tools/grafana/framework/generate.py` 里的 `render()`，并把 Jsonnet 入口 `tools/grafana/dashboards.jsonnet` 传给它。
+2. **求值（Evaluate）** —— `render()` 用 go-jsonnet 对 `tools/grafana/dashboards.jsonnet` 求值。该入口导入 composition registry `dashboard_compositions.libsonnet`（后者再导入 `dashboards/*.libsonnet` 里的可复用模块）以及组合库 `framework/composer.libsonnet`。composer 是这个入口导入并调用的库——不是生成器在它之前执行的独立步骤。
+3. **组合（Compose）** —— 入口对每一个已注册的 composition 调用 `composer.compose(modules, dashboard)`，把选中的模块合并成一个完整的 dashboard 对象。`render()` 返回 `{ "<composition-name>": <dashboard object> }`。
+4. **序列化并写入（Serialize and write）** —— 薄封装用框架核心的 `generated_text()` 逐个序列化 dashboard，写入 `rl_insight/config/services/grafana/dashboards/verl/`；这些文件会被提交。
+5. **启动时复制（Copy at startup）** —— `rl_insight/server/runtime.py:prepare_files()` 调用 `_stage_grafana_dashboards()`，把已提交的 JSON 复制到 `<runtime_dir>/dashboards`。运行时使用的是这些暂存副本；Grafana 从不直接读取仓库路径。
+6. **加载（Load）** —— `_render_grafana_provisioning()` 写出 `provisioning/dashboards/default.yml`，这是一个 file provider，其 `options.path` 指向 `<runtime_dir>/dashboards`。Grafana 启动时读取该 provisioning 文件，扫描它指向的目录，加载其中的暂存 dashboard JSON。
 
 这套结构的目标是：
 
@@ -76,32 +78,37 @@ Grafana
 本次重构**变更前后运行时行为完全一致**。运行时只有一条路径，它从不执行 Jsonnet，这里只画一次：
 
 ```text
-RL-Insight 启动
+仓库：rl_insight/config/services/grafana/dashboards/verl/*.json
+    已提交的 dashboard JSON，在开发期生成（见「架构」）
         │
-        │ PREPARED BY（由谁准备）—— prepare_files() 把已提交的 dashboard JSON
-        │ 复制到运行时目录，并写出指向该目录的 Grafana provisioning 文件
-        │ （即该配置指向这些 dashboard 文件）
+        │ COPIED AT STARTUP BY（启动时被谁复制）—— RL-Insight 启动时执行
+        │ rl_insight/server/runtime.py:prepare_files()，它调用
+        │ _stage_grafana_dashboards() 把这些文件复制到运行时目录
+        ▼
+<runtime_dir>/dashboards/*.json
+    暂存副本——运行时读取的是这些副本，从不直接读取仓库路径
+        │
+        │ POINTED AT BY（被谁指向）—— _render_grafana_provisioning() 写出
+        │ provisioning/dashboards/default.yml，其 file provider 把
+        │ options.path 设为本目录（指向目录，而不是逐个文件列举）
         ▼
 Grafana provisioning
         │
-        │ DISCOVERED BY（由谁发现）—— Grafana 启动时读取该配置，
-        │ 找到其中列出的 dashboard 文件
-        ▼
-committed dashboard JSON
-        │
-        │ READ BY（由谁读取）—— Grafana 解析这些文件并展示 dashboard
+        │ SCANNED BY（被谁扫描）—— Grafana 启动时读取该配置，扫描它指向的
+        │ 目录，并加载其中找到的 dashboard 文件
         ▼
 Grafana
+    实际加载并展示 dashboard 的服务
 ```
 
 上图中的名词含义：
 
-| 名词                       | 含义                                                                                                                                                                       |
-| -------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `provisioning`             | Grafana 的“按配置发现 dashboard”机制：Grafana 启动时读取自己的 provisioning 文件，并加载这些文件所指向的 dashboard 文件。                                                  |
-| `committed dashboard JSON` | 仓库中已生成并提交的最终 Grafana JSON（`rl_insight/config/services/grafana/dashboards/verl/*.json`）。运行时直接读取这份 JSON，它是运行时的输入。                          |
-| `Grafana`                  | 实际加载并展示 dashboard 的服务。                                                                                                                                          |
-| `gojsonnet`                | 把 Jsonnet 求值为 JSON 的引擎。它只在 dashboard 开发和生成期间运行，绝不在用户运行时执行。                                                                                  |
+| 名词                       | 含义                                                                                                                                                                                                                     |
+| -------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `provisioning`             | Grafana 的“按配置发现 dashboard”机制：Grafana 启动时读取自己的 provisioning 文件，扫描这些文件所指向的目录，并加载其中找到的 dashboard 文件。file provider 指向的是目录，不是逐文件列表。                              |
+| `committed dashboard JSON` | 仓库中已生成并提交的最终 Grafana JSON（`rl_insight/config/services/grafana/dashboards/verl/*.json`）。启动时它会被复制到 `<runtime_dir>/dashboards`，Grafana 加载的是这些暂存副本。                                       |
+| `Grafana`                  | 实际加载并展示 dashboard 的服务。                                                                                                                                                                                        |
+| `gojsonnet`                | 把 Jsonnet 求值为 JSON 的引擎。它只在 dashboard 开发和生成期间运行，绝不在用户运行时执行。                                                                                                                                |
 
 ## 生成是自动的吗？
 
@@ -111,7 +118,7 @@ Grafana
 
 1. `_render_grafana_config()` 写出 `grafana.ini`；
 2. `_stage_grafana_dashboards()` 把 `grafana.dashboards_dir`（`rl_insight/config/services/grafana/dashboards/`）下**已经提交**的 JSON 复制到运行时目录。它只复制文件——从不执行生成器；
-3. `_render_grafana_provisioning()` 写出 `provisioning/dashboards/default.yml`，这是一个 Grafana file provider，其 `options.path` 指向该运行时目录。
+3. `_render_grafana_provisioning()` 写出 `provisioning/dashboards/default.yml`，这是一个 Grafana file provider，其 `options.path` 指向该运行时目录。随后 Grafana 扫描该目录并加载其中的暂存副本——而不是仓库里的文件。
 
 所以生成出来的 JSON 不会在启动时产生；它由开发者生成一次，然后提交。
 

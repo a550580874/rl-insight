@@ -7,46 +7,49 @@ are composed into the committed Grafana JSON files the running service loads.
 
 ## Architecture
 
-The pipeline has a development-time half (sources → generator → committed JSON)
-and a runtime half (startup → provisioning → Grafana). Every arrow below states
-what the next step actually does.
+The development-time half is a command a developer runs (wrapper → framework
+core → Jsonnet entrypoint → committed JSON); the runtime half is what the
+running service does (startup → staging → provisioning → Grafana). Every arrow
+below states what the next step actually does.
 
 ```text
-tools/grafana/dashboards/*.libsonnet
-    reusable content modules: panels / rows / variables for one subsystem each
+developer runs: python tools/grafana/generate_dashboards.py
         │
-        │ IMPORTED BY — the composition registry imports the modules it needs
+        │ CALLS — the production wrapper calls render() in the framework core
+        │ tools/grafana/framework/generate.py, passing the Jsonnet entrypoint
+        │ tools/grafana/dashboards.jsonnet
         ▼
-tools/grafana/dashboard_compositions.libsonnet
-    the composition registry: which modules make up each dashboard
+render(tools/grafana/dashboards.jsonnet)
         │
-        │ READ BY — dashboards.jsonnet reads every composition registered here
+        │ EVALUATES WITH go-jsonnet — the file the generator evaluates is the
+        │ entrypoint tools/grafana/dashboards.jsonnet
         ▼
-tools/grafana/dashboards.jsonnet
-    thin entrypoint: composes every registered composition
+tools/grafana/dashboards.jsonnet  (the generator's Jsonnet entrypoint)
+    imports the registry tools/grafana/dashboard_compositions.libsonnet, which
+    in turn imports the reusable modules tools/grafana/dashboards/*.libsonnet
+    imports the composition library tools/grafana/framework/composer.libsonnet,
+    a library this entrypoint calls — not a step the generator runs before it
         │
-        │ COMPOSED BY — composer.compose(modules, dashboard) merges the
-        │ selected modules into one complete dashboard object
+        │ COMPOSES — for every registered composition the entrypoint calls
+        │ composer.compose(modules, dashboard), merging the selected modules
+        │ into one complete dashboard object
         ▼
-tools/grafana/framework/composer.libsonnet
+{ "<composition-name>": <complete dashboard object>, ... }
         │
-        │ RENDERED BY — the generator evaluates this Jsonnet with go-jsonnet
-        │ and serializes the result to JSON text
+        │ SERIALIZED BY — the wrapper serializes each object with
+        │ generated_text() from the framework core and writes it out
         ▼
-tools/grafana/generate_dashboards.py
-        │
-        │ WRITTEN TO — one <composition-name>.json per registered dashboard
-        ▼
-rl_insight/config/services/grafana/dashboards/verl/*.json
+rl_insight/config/services/grafana/dashboards/verl/<composition-name>.json
     generated production dashboards, committed to the repository
         │
         │ COPIED AT STARTUP BY — rl_insight/server/runtime.py
-        │ _stage_grafana_dashboards() copies these files into the runtime dir
+        │ _stage_grafana_dashboards() copies these committed files
         ▼
-<runtime_dir>/dashboards
+<runtime_dir>/dashboards/<composition-name>.json  (staged runtime copies)
         │
-        │ LOADED BY — Grafana reads the provisioning file written by
-        │ _render_grafana_provisioning(), which points at this directory
+        │ POINTED AT BY — _render_grafana_provisioning() writes
+        │ provisioning/dashboards/default.yml, whose file provider sets
+        │ options.path to <runtime_dir>/dashboards
         ▼
 Grafana
     the service that loads and displays the dashboards
@@ -54,23 +57,33 @@ Grafana
 
 The same pipeline in words:
 
-1. **Select** — `dashboard_compositions.libsonnet` imports the reusable modules
-   and records, per dashboard, which modules belong to it.
-2. **Compose** — `dashboards.jsonnet` calls
-   `composer.compose(modules, dashboard)` for every registry entry, merging the
-   selected modules into one complete dashboard object.
-3. **Render** — `generate_dashboards.py` evaluates that Jsonnet with go-jsonnet
-   and serializes the result deterministically.
-4. **Write** — the generator writes one `<composition-name>.json` per
-   registered dashboard into
+1. **Invoke** — the developer runs `python tools/grafana/generate_dashboards.py`.
+   The wrapper calls `render()` in the framework core
+   `tools/grafana/framework/generate.py`, passing the Jsonnet entrypoint
+   `tools/grafana/dashboards.jsonnet`.
+2. **Evaluate** — `render()` evaluates `tools/grafana/dashboards.jsonnet` with
+   go-jsonnet. That entrypoint imports the composition registry
+   `dashboard_compositions.libsonnet` (which imports the reusable modules in
+   `dashboards/*.libsonnet`) and the composition library
+   `framework/composer.libsonnet`. The composer is a library the entrypoint
+   imports and calls — not a sequential step the generator runs before it.
+3. **Compose** — for every registered composition the entrypoint calls
+   `composer.compose(modules, dashboard)`, merging the selected modules into one
+   complete dashboard object. `render()` returns
+   `{ "<composition-name>": <dashboard object> }`.
+4. **Serialize and write** — the wrapper serializes each dashboard with
+   `generated_text()` from the framework core and writes it into
    `rl_insight/config/services/grafana/dashboards/verl/`; those files are
    committed.
 5. **Copy at startup** — `rl_insight/server/runtime.py:prepare_files()` calls
-   `_stage_grafana_dashboards()`, which copies the committed JSON into the
-   runtime directory.
-6. **Load** — Grafana reads the provisioning file that
-   `_render_grafana_provisioning()` wrote and loads the dashboards from the
-   directory it points at.
+   `_stage_grafana_dashboards()`, which copies the committed JSON into
+   `<runtime_dir>/dashboards`. These staged copies are what the runtime uses;
+   Grafana never reads the repository path directly.
+6. **Load** — `_render_grafana_provisioning()` writes
+   `provisioning/dashboards/default.yml`, a file provider whose `options.path`
+   points at `<runtime_dir>/dashboards`. At startup Grafana reads that
+   provisioning file and scans the directory it points at, loading the staged
+   dashboard JSON it finds there.
 
 The goals of this structure are:
 
@@ -91,32 +104,37 @@ Runtime behavior is **exactly the same before and after** this refactor. There
 is one runtime path, it never evaluates Jsonnet, and it is drawn once here:
 
 ```text
-RL-Insight startup
+repository: rl_insight/config/services/grafana/dashboards/verl/*.json
+    the committed dashboard JSON, produced at development time (see Architecture)
         │
-        │ PREPARED BY — prepare_files() copies the committed dashboard JSON
-        │ into the runtime directory and writes the Grafana provisioning file
-        │ that points at it
+        │ COPIED AT STARTUP BY — RL-Insight startup runs
+        │ rl_insight/server/runtime.py:prepare_files(), which calls
+        │ _stage_grafana_dashboards() to copy these files into the runtime dir
+        ▼
+<runtime_dir>/dashboards/*.json
+    staged copies — the runtime reads these, never the repository path directly
+        │
+        │ POINTED AT BY — _render_grafana_provisioning() writes
+        │ provisioning/dashboards/default.yml, whose file provider sets
+        │ options.path to this directory (a directory, not a list of files)
         ▼
 Grafana provisioning
         │
-        │ DISCOVERED BY — at startup Grafana reads that configuration and
-        │ finds the dashboard files it lists
-        ▼
-committed dashboard JSON
-        │
-        │ READ BY — Grafana parses those files and displays the dashboards
+        │ SCANNED BY — at startup Grafana reads that configuration and scans
+        │ the directory it points at, loading the dashboard files it finds
         ▼
 Grafana
+    the service that loads and displays the dashboards
 ```
 
 Terms used above:
 
-| Term                       | Meaning                                                                                                                                                                                         |
-| -------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `provisioning`             | Grafana's configuration-driven dashboard discovery: at startup Grafana reads its provisioning files and loads the dashboard files those files point at.                                         |
-| `committed dashboard JSON` | The final, already-generated Grafana JSON stored in the repository (`rl_insight/config/services/grafana/dashboards/verl/*.json`). The runtime reads this JSON directly; it is the runtime input. |
-| `Grafana`                  | The service that actually loads and displays the dashboards.                                                                                                                                    |
-| `gojsonnet`                | The engine that evaluates Jsonnet into JSON. It runs only during dashboard development and generation, never in the user runtime.                                                               |
+| Term                       | Meaning                                                                                                                                                                                                                      |
+| -------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `provisioning`             | Grafana's configuration-driven dashboard discovery: at startup Grafana reads its provisioning files and scans the directories they point at, loading the dashboard files found there. A file provider points at a directory, not at a list of files. |
+| `committed dashboard JSON` | The final, already-generated Grafana JSON stored in the repository (`rl_insight/config/services/grafana/dashboards/verl/*.json`). At startup it is copied into `<runtime_dir>/dashboards`, and Grafana loads those staged copies. |
+| `Grafana`                  | The service that actually loads and displays the dashboards.                                                                                                                                                                 |
+| `gojsonnet`                | The engine that evaluates Jsonnet into JSON. It runs only during dashboard development and generation, never in the user runtime.                                                                                            |
 
 ## Is generation automatic?
 
@@ -133,7 +151,8 @@ three steps (`runtime.py:112`–`115`):
    generator;
 3. `_render_grafana_provisioning()` writes
    `provisioning/dashboards/default.yml`, a Grafana file provider whose
-   `options.path` points at that runtime directory.
+   `options.path` points at that runtime directory. Grafana then scans that
+   directory and loads the staged copies in it — not the repository files.
 
 So the generated JSON is never produced at startup; it is produced once, by a
 developer, and committed.
