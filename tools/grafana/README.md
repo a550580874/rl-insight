@@ -2,10 +2,77 @@
 
 > **简体中文版本: [README.zh-CN.md](README.zh-CN.md)**
 
-Grafana dashboards are maintained as reusable Jsonnet modules and composed into
-the committed Grafana JSON files used by RL-Insight.
+RL-Insight's Grafana dashboards are maintained as reusable Jsonnet modules that
+are composed into the committed Grafana JSON files the running service loads.
 
-The goals are:
+## Architecture
+
+The pipeline has a development-time half (sources → generator → committed JSON)
+and a runtime half (startup → provisioning → Grafana). Every arrow below states
+what the next step actually does.
+
+```text
+tools/grafana/dashboards/*.libsonnet
+    reusable content modules: panels / rows / variables for one subsystem each
+        │
+        │ IMPORTED BY — the composition registry imports the modules it needs
+        ▼
+tools/grafana/dashboard_compositions.libsonnet
+    the composition registry: which modules make up each dashboard
+        │
+        │ READ BY — dashboards.jsonnet reads every composition registered here
+        ▼
+tools/grafana/dashboards.jsonnet
+    thin entrypoint: composes every registered composition
+        │
+        │ COMPOSED BY — composer.compose(modules, dashboard) merges the
+        │ selected modules into one complete dashboard object
+        ▼
+tools/grafana/framework/composer.libsonnet
+        │
+        │ RENDERED BY — the generator evaluates this Jsonnet with go-jsonnet
+        │ and serializes the result to JSON text
+        ▼
+tools/grafana/generate_dashboards.py
+        │
+        │ WRITTEN TO — one <composition-name>.json per registered dashboard
+        ▼
+rl_insight/config/services/grafana/dashboards/verl/*.json
+    generated production dashboards, committed to the repository
+        │
+        │ COPIED AT STARTUP BY — rl_insight/server/runtime.py
+        │ _stage_grafana_dashboards() copies these files into the runtime dir
+        ▼
+<runtime_dir>/dashboards
+        │
+        │ LOADED BY — Grafana reads the provisioning file written by
+        │ _render_grafana_provisioning(), which points at this directory
+        ▼
+Grafana
+    the service that loads and displays the dashboards
+```
+
+The same pipeline in words:
+
+1. **Select** — `dashboard_compositions.libsonnet` imports the reusable modules
+   and records, per dashboard, which modules belong to it.
+2. **Compose** — `dashboards.jsonnet` calls
+   `composer.compose(modules, dashboard)` for every registry entry, merging the
+   selected modules into one complete dashboard object.
+3. **Render** — `generate_dashboards.py` evaluates that Jsonnet with go-jsonnet
+   and serializes the result deterministically.
+4. **Write** — the generator writes one `<composition-name>.json` per
+   registered dashboard into
+   `rl_insight/config/services/grafana/dashboards/verl/`; those files are
+   committed.
+5. **Copy at startup** — `rl_insight/server/runtime.py:prepare_files()` calls
+   `_stage_grafana_dashboards()`, which copies the committed JSON into the
+   runtime directory.
+6. **Load** — Grafana reads the provisioning file that
+   `_render_grafana_provisioning()` wrote and loads the dashboards from the
+   directory it points at.
+
+The goals of this structure are:
 
 - reuse common dashboard content instead of copying large JSON files;
 - make new dashboard variants easy to add and maintain;
@@ -13,94 +80,134 @@ The goals are:
 
 ## Who is this for?
 
-| Role                      | What changes?                                       | What should I do?                                                               |
-| ------------------------- | --------------------------------------------------- | ------------------------------------------------------------------------------- |
-| RL-Insight / Grafana user | Nothing at runtime                                  | Start and use RL-Insight exactly as before                                      |
-| Dashboard developer       | Dashboards are authored as modules + compositions   | Edit the composition registry, add modules only when needed, then generate JSON |
-| Framework contributor     | Only generic composition/rendering behavior changes | See [`framework/README.md`](framework/README.md)                                |
+| Role                      | What changes?                                     | What should I do?                                                                                  |
+| ------------------------- | ------------------------------------------------- | -------------------------------------------------------------------------------------------------- |
+| RL-Insight / Grafana user | Nothing at runtime                                | Start and use RL-Insight exactly as before                                                         |
+| Dashboard developer       | Dashboards are authored as modules + compositions | Edit the composition registry, add modules only when needed, then generate and commit the JSON      |
 
-## Before and after
+## Runtime behavior
 
-### User behavior
-
-Before:
+Runtime behavior is **exactly the same before and after** this refactor. There
+is one runtime path, it never evaluates Jsonnet, and it is drawn once here:
 
 ```text
 RL-Insight startup
-→ Grafana provisioning
-→ committed dashboard JSON
-→ Grafana
-```
-
-After:
-
-```text
-RL-Insight startup
-→ Grafana provisioning
-→ committed dashboard JSON
-→ Grafana
-```
-
-There is **no runtime behavior change**.
-
-Grafana does not execute Jsonnet. `gojsonnet` is only used during dashboard
-development and generation.
-
-### Dashboard development
-
-Before:
-
-```text
-copy / edit a complete Grafana JSON
-→ repeat common changes across dashboard variants
-```
-
-After:
-
-```text
-reuse modules
-→ define a composition
-→ generate
-→ verify
-→ commit JSON
-```
-
-## Architecture
-
-```text
-dashboards/*.libsonnet
         │
-        │ reusable panels / rows / variables
-        ▼
-dashboard_compositions.libsonnet
-        │
-        │ defines which modules make up each dashboard
-        ▼
-dashboards.jsonnet
-        │
-        ▼
-framework/composer.libsonnet
-        │
-        ▼
-generate_dashboards.py
-        │
-        ▼
-rl_insight/config/services/grafana/dashboards/verl/*.json
-        │
+        │ PREPARED BY — prepare_files() copies the committed dashboard JSON
+        │ into the runtime directory and writes the Grafana provisioning file
+        │ that points at it
         ▼
 Grafana provisioning
+        │
+        │ DISCOVERED BY — at startup Grafana reads that configuration and
+        │ finds the dashboard files it lists
+        ▼
+committed dashboard JSON
+        │
+        │ READ BY — Grafana parses those files and displays the dashboards
+        ▼
+Grafana
 ```
 
-For normal dashboard development, the main entry point is:
+Terms used above:
+
+| Term                       | Meaning                                                                                                                                                                                         |
+| -------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `provisioning`             | Grafana's configuration-driven dashboard discovery: at startup Grafana reads its provisioning files and loads the dashboard files those files point at.                                         |
+| `committed dashboard JSON` | The final, already-generated Grafana JSON stored in the repository (`rl_insight/config/services/grafana/dashboards/verl/*.json`). The runtime reads this JSON directly; it is the runtime input. |
+| `Grafana`                  | The service that actually loads and displays the dashboards.                                                                                                                                    |
+| `gojsonnet`                | The engine that evaluates Jsonnet into JSON. It runs only during dashboard development and generation, never in the user runtime.                                                               |
+
+## Is generation automatic?
+
+**No.** An ordinary RL-Insight user never runs the generator, and nothing in
+the startup path evaluates Jsonnet.
+
+At startup, `rl_insight/server/runtime.py:prepare_files()` handles Grafana in
+three steps (`runtime.py:112`–`115`):
+
+1. `_render_grafana_config()` writes `grafana.ini`;
+2. `_stage_grafana_dashboards()` copies the **already committed** JSON from
+   `grafana.dashboards_dir` (`rl_insight/config/services/grafana/dashboards/`)
+   into the runtime directory. It only copies files — it never runs the
+   generator;
+3. `_render_grafana_provisioning()` writes
+   `provisioning/dashboards/default.yml`, a Grafana file provider whose
+   `options.path` points at that runtime directory.
+
+So the generated JSON is never produced at startup; it is produced once, by a
+developer, and committed.
+
+A dashboard developer who changes the Jsonnet sources must therefore generate
+manually — run `python tools/grafana/generate_dashboards.py`, then
+`python tools/grafana/generate_dashboards.py --check`, then commit the
+regenerated JSON. See [Generate and verify](#generate-and-verify) for the
+commands and for what `--check` compares.
+
+## Two generation layers
+
+Generation is split into two layers. **Neither layer is a step in the startup
+path**, and the repository has no CI job that invokes them today.
+
+| Layer                          | File                                   | Responsibility                                                                                                                                                                                                                                                                                               |
+| ------------------------------ | -------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Production wrapper (#173)      | `tools/grafana/generate_dashboards.py` | Production-specific defaults only: it points the framework generator at `tools/grafana/dashboards.jsonnet` and at the committed output directory `rl_insight/config/services/grafana/dashboards/verl/`. Its `--check` compares parsed JSON objects, so serialization-only key-order differences are ignored. |
+| Framework core (generic, #174) | `tools/grafana/framework/generate.py`  | The reusable render/serialize core: evaluates a composition config with go-jsonnet, serializes deterministically (sorted keys, fixed indentation), and exposes `render()` and `generated_text()`.                                                                                                            |
+
+`generate_dashboards.py` does not reimplement any of that; it imports
+`generate` from `tools/grafana/framework/`. That framework directory belongs to
+the generic composition change (#174) and is not vendored on this branch.
+
+## Dashboard development: before and after
+
+### Before
+
+Every dashboard was one complete Grafana JSON file — thousands of lines —
+committed to the repository, and a new variant was made by copying such a file
+and editing the copy.
 
 ```text
-tools/grafana/dashboard_compositions.libsonnet
+one complete Grafana JSON per dashboard
+        │
+        │ COPY AND EDIT — every variant starts as a full copy of an existing file
+        ▼
+several near-identical large JSON files
+        │
+        │ REPEAT BY HAND — a shared change must be applied to every copy
+        ▼
+the copies drift apart
 ```
 
-If you want to define which modules make up a production dashboard, this is
-the file you normally edit.
+The maintenance problem: a shared change (a new panel, a renamed variable, a
+threshold fix) had to be repeated by hand in every copy, nothing kept the copies
+in sync, and reviewing a change meant reading a multi-thousand-line JSON diff.
 
-Do not add dashboard-specific logic to `composer.libsonnet`.
+### After
+
+The content dashboards have in common is factored into reusable modules. A
+module owns a slice of dashboard content — its panels, rows, and variables —
+for one subsystem. A composition names which modules make up a dashboard, and
+the generator merges them into one complete Grafana JSON file.
+
+```text
+panels / rows / variables split into reusable modules
+        │
+        │ SELECT — a composition names the modules that make up one dashboard
+        ▼
+composition registry (dashboard_compositions.libsonnet)
+        │
+        │ COMPOSE — the generator merges exactly those modules
+        ▼
+one complete Grafana JSON file per dashboard
+```
+
+What this fixes:
+
+- a shared change is made once, in the module that owns it, instead of in every
+  copy;
+- adding a dashboard variant is one registry entry, not another copy of a large
+  JSON file;
+- dashboard content is reviewed as small modules instead of one huge JSON diff.
 
 ## Reusable modules
 
@@ -339,26 +446,6 @@ Structural migration checks are also available in:
 ```text
 tools/grafana/dashboards/verify_modules.jsonnet
 ```
-
-## Runtime behavior
-
-Generated JSON remains committed under:
-
-```text
-rl_insight/config/services/grafana/dashboards/verl/
-```
-
-Grafana continues to load those files through the existing provisioning
-configuration.
-
-Existing users do not need to:
-
-- install Jsonnet;
-- run the generator;
-- change startup commands;
-- change Grafana configuration.
-
-Jsonnet is a development-time source format only.
 
 ## Limitations
 
