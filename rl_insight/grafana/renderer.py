@@ -125,8 +125,7 @@ def materialize_dashboards(
         if collisions:
             raise JsonnetRenderError(
                 f"refusing to overwrite existing dashboard file(s) rendered "
-                f"from config {config}: "
-                + ", ".join(str(path) for path in collisions)
+                f"from config {config}: " + ", ".join(str(path) for path in collisions)
             )
 
     output_dir.mkdir(parents=True, exist_ok=True)

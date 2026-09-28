@@ -271,10 +271,12 @@ def two_dashboard_config(tmp_path: Path) -> Path:
         + "';\n"
         "{\n"
         "  first: composer.compose([m1], "
-        + DASHBOARD % ("['zone_m1']", "['m1-row']")
+        + DASHBOARD
+        % ("['zone_m1']", "['m1-row']")
         + "),\n"
         "  second: composer.compose([m2], "
-        + DASHBOARD % ("['zone_m2']", "['m2-row']")
+        + DASHBOARD
+        % ("['zone_m2']", "['m2-row']")
         + "),\n"
         "}\n",
     )
@@ -289,9 +291,12 @@ def test_materialize_overwrites_by_default(tmp_path: Path) -> None:
     (output_dir / "compose.json").write_text("old\n", encoding="utf-8")
     written = renderer.materialize_dashboards(config, output_dir)
     assert written == [output_dir / "compose.json"]
-    assert json.loads((output_dir / "compose.json").read_text(encoding="utf-8"))[
-        "spec"
-    ]["title"] == "Toy dashboard"
+    assert (
+        json.loads((output_dir / "compose.json").read_text(encoding="utf-8"))["spec"][
+            "title"
+        ]
+        == "Toy dashboard"
+    )
 
 
 def test_materialize_without_overwrite_writes_when_no_target_exists(
