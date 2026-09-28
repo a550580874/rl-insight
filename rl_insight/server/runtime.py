@@ -18,33 +18,48 @@ from __future__ import annotations
 
 import configparser
 import datetime as _dt
-import fcntl
+import errno
 import json
 import os
 import re
 import shutil
 import signal
+import socket
 import subprocess
 import sys
 import time
-from contextlib import contextmanager
+from collections.abc import Sequence
+from contextlib import ExitStack, contextmanager
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Sequence
+from typing import Any
 
+import psutil
+import requests
 import yaml
 from omegaconf import DictConfig, OmegaConf
 
-from .catalog import DEFAULT_STATE_ROOT, STATE_FILE
-from .network import format_host_port, local_addresses
 from ..utils.constants import (
     PrometheusScrape,
     prometheus_targets_file_from_config,
 )
+from .catalog import DEFAULT_STATE_ROOT, STATE_FILE
 from .dependencies import (
-    MissingDependencyError,
     DependencyManager,
+    MissingDependencyError,
 )
+from .network import format_host_port, local_addresses
+
+_HEALTH_ENDPOINTS = {
+    "rl-insight-server": ("server.port", "/healthz"),
+    "prometheus": ("prometheus.prometheus_port", "/-/ready"),
+    "tempo": ("tempo.query_port", "/ready"),
+    "grafana": ("grafana.port", "/api/health"),
+}
+
+
+class PortConflictError(RuntimeError):
+    """A child process lost its allocated port before binding."""
 
 
 @dataclass(frozen=True)
@@ -122,7 +137,118 @@ class LocalServiceRuntime:
             grafana_homepath=self.dependencies.resolve_grafana_homepath(grafana_binary),
         )
 
-    def start(self, *, detach: bool, attach_logs: bool) -> StartedStack | None:
+    def start(
+        self, *, detach: bool, attach_logs: bool, auto_port: bool = False
+    ) -> StartedStack | None:
+        for attempt in range(3 if auto_port else 1):
+            try:
+                return self._start_once(
+                    detach=detach, attach_logs=attach_logs, auto_port=auto_port
+                )
+            except PortConflictError:
+                if attempt == 2 or not auto_port:
+                    raise
+        return None
+
+    def _assign_ports(self) -> None:
+        """Plan distinct ports, reserving them together until allocation finishes."""
+        ports = {key: service for service, (key, _) in _HEALTH_ENDPOINTS.items()}
+        ports["otel.otel_port"] = "tempo"
+        if OmegaConf.select(self.conf, "tempo.enable", default=True):
+            tempo = yaml.safe_load(
+                Path(str(self.conf.tempo.config_file)).read_text(encoding="utf-8")
+            )
+            for key, section, field, default in (
+                ("grpc_port", "server", "grpc_listen_port", 9095),
+                ("memberlist_port", "memberlist", "bind_port", 7946),
+            ):
+                path = f"tempo.{key}"
+                if OmegaConf.select(self.conf, path) is None:
+                    port = (tempo or {}).get(section, {}).get(field, default)
+                    OmegaConf.update(self.conf, path, port)
+                ports[path] = "tempo"
+        address = local_addresses()
+        family = socket.AF_INET6 if address["family"] == "ipv6" else socket.AF_INET
+        with ExitStack() as reservations:
+            for key, service in ports.items():
+                section = "server" if service == "rl-insight-server" else service
+                if not OmegaConf.select(self.conf, f"{section}.enable", default=True):
+                    continue
+                port = int(OmegaConf.select(self.conf, key))
+                if not 0 <= port <= 65535:
+                    raise RuntimeError(f"Invalid port for {key}: {port}")
+                kinds = [socket.SOCK_STREAM]
+                if key == "tempo.memberlist_port":
+                    kinds.append(socket.SOCK_DGRAM)
+                for _ in range(32):
+                    with ExitStack() as candidate:
+                        try:
+                            for kind in kinds:
+                                sock = candidate.enter_context(
+                                    socket.socket(family, kind)
+                                )
+                                if sys.platform == "win32":
+                                    sock.setsockopt(
+                                        socket.SOL_SOCKET, socket.SO_EXCLUSIVEADDRUSE, 1
+                                    )
+                                sock.bind((address["bind"], port))
+                                port = sock.getsockname()[1]
+                        except OSError as exc:
+                            if exc.errno not in (errno.EADDRINUSE, errno.EACCES):
+                                raise RuntimeError(
+                                    f"Cannot allocate {key}: {exc}"
+                                ) from exc
+                            port = 0
+                            continue
+                        reservations.enter_context(candidate.pop_all())
+                        OmegaConf.update(self.conf, key, port)
+                        break
+                else:
+                    raise RuntimeError(f"Could not allocate a port for {key}")
+
+    def _wait_ready(self, service: StartedService, offset: int) -> None:
+        """Check readiness and classify only this attempt's startup errors."""
+        key, path = _HEALTH_ENDPOINTS[service.name]
+        host = "::1" if local_addresses()["family"] == "ipv6" else "127.0.0.1"
+        url = (
+            "http://" + format_host_port(host, OmegaConf.select(self.conf, key)) + path
+        )
+        deadline = time.monotonic() + 60
+        with requests.Session() as session:
+            session.trust_env = False
+            while True:
+                if service.process.poll() is not None:
+                    with service.log_file.open("rb") as log:
+                        log.seek(offset)
+                        message = log.read().decode("utf-8", errors="replace").lower()
+                    conflict = any(
+                        text in message
+                        for text in (
+                            "address already in use",
+                            "only one usage of each socket address",
+                            "[errno 10048]",
+                            "[winerror 10048]",
+                            "forbidden by its access permissions",
+                        )
+                    )
+                    error = PortConflictError if conflict else RuntimeError
+                    raise error(
+                        f"{service.name} exited during startup. See log: {service.log_file}"
+                    )
+                try:
+                    if session.get(url, timeout=1).status_code == 200:
+                        return
+                except requests.RequestException:
+                    pass
+                if time.monotonic() >= deadline:
+                    raise RuntimeError(
+                        f"{service.name} not ready after 60s. See log: {service.log_file}"
+                    )
+                time.sleep(0.2)
+
+    def _start_once(
+        self, *, detach: bool, attach_logs: bool, auto_port: bool
+    ) -> StartedStack | None:
         """Start local service processes and write the PID state file."""
         active_state = load_active_state(self.state_file)
         if active_state:
@@ -133,6 +259,8 @@ class LocalServiceRuntime:
         if missing:
             raise MissingDependencyError(missing)
 
+        if auto_port:
+            self._assign_ports()
         status_by_name = {status.name: status for status in statuses}
         tempo_status = status_by_name.get("tempo")
         grafana_status = status_by_name.get("grafana")
@@ -154,6 +282,7 @@ class LocalServiceRuntime:
                     name, binary, self.conf, runtime_files, self.install_root
                 )
                 log_file = log_dir / f"{name}.log"
+                offset = log_file.stat().st_size if log_file.exists() else 0
                 process = _spawn_service(name, command, log_file)
                 started.append(
                     StartedService(
@@ -163,6 +292,8 @@ class LocalServiceRuntime:
                         log_file=log_file,
                     )
                 )
+                if auto_port:
+                    self._wait_ready(started[-1], offset)
                 time.sleep(0.3)
                 return_code = process.poll()
                 if return_code is not None:
@@ -174,6 +305,7 @@ class LocalServiceRuntime:
                 name = "rl-insight-server"
                 command = _server_command(self.conf, runtime_files)
                 log_file = log_dir / "rl-insight-server.log"
+                offset = log_file.stat().st_size if log_file.exists() else 0
                 process = _spawn_service(name, command, log_file)
                 started.append(
                     StartedService(
@@ -183,6 +315,8 @@ class LocalServiceRuntime:
                         log_file=log_file,
                     )
                 )
+                if auto_port:
+                    self._wait_ready(started[-1], offset)
                 time.sleep(0.3)
                 return_code = process.poll()
                 if return_code is not None:
@@ -329,6 +463,8 @@ def load_active_state(state_file: Path) -> dict[str, Any] | None:
 def is_process_running(pid: int) -> bool:
     if pid <= 0:
         return False
+    if sys.platform == "win32":
+        return psutil.pid_exists(pid)
     try:
         os.kill(pid, 0)
     except OSError:
@@ -574,11 +710,23 @@ def _prometheus_targets_lock(path: Path):
     path.parent.mkdir(parents=True, exist_ok=True)
     lock_file = path.with_name(f".{path.name}.lock")
     with lock_file.open("a+", encoding="utf-8") as handle:
-        fcntl.flock(handle.fileno(), fcntl.LOCK_EX)
+        if sys.platform == "win32":
+            import msvcrt
+
+            handle.seek(0)
+            msvcrt.locking(handle.fileno(), msvcrt.LK_LOCK, 1)
+        else:
+            import fcntl
+
+            fcntl.flock(handle.fileno(), fcntl.LOCK_EX)
         try:
             yield
         finally:
-            fcntl.flock(handle.fileno(), fcntl.LOCK_UN)
+            if sys.platform == "win32":
+                handle.seek(0)
+                msvcrt.locking(handle.fileno(), msvcrt.LK_UNLCK, 1)
+            else:
+                fcntl.flock(handle.fileno(), fcntl.LOCK_UN)
 
 
 def _read_file_sd_targets(path: Path) -> list[dict[str, Any]]:
@@ -643,6 +791,12 @@ def _render_tempo_config(
     server_data = data.setdefault("server", {})
     server_data["http_listen_port"] = query_port
     server_data["http_listen_address"] = local_addresses()["bind"]
+    for key, section, field in (
+        ("grpc_port", "server", "grpc_listen_port"),
+        ("memberlist_port", "memberlist", "bind_port"),
+    ):
+        if OmegaConf.select(conf, f"tempo.{key}") is not None:
+            data.setdefault(section, {})[field] = int(conf.tempo[key])
     receiver = (
         data.setdefault("distributor", {})
         .setdefault("receivers", {})
@@ -770,9 +924,47 @@ def _stage_grafana_dashboards(conf: DictConfig, runtime_dir: Path) -> Path:
     source = Path(str(OmegaConf.select(conf, "grafana.dashboards_dir"))).resolve()
     target = (runtime_dir / "dashboards").resolve()
     target.mkdir(parents=True, exist_ok=True)
-    if source == target or not source.exists():
+    if source != target and source.exists():
+        shutil.rmtree(target)
+        target.mkdir(parents=True)
+        _copy_dashboard_directory(source, target)
+
+    extra = OmegaConf.select(conf, "grafana.extra_dashboard_dir")
+    if extra is None:
         return target
 
+    planned_json = {
+        path.relative_to(target)
+        for path in target.rglob("*")
+        if path.is_file() and path.suffix.casefold() == ".json"
+    }
+    extra_source = Path(str(extra)).resolve()
+    if extra_source == target:
+        return target
+    if not extra_source.exists():
+        raise RuntimeError(
+            f"Extra Grafana dashboard directory {str(extra_source)!r} does not exist."
+        )
+    if not extra_source.is_dir():
+        raise RuntimeError(
+            f"Extra Grafana dashboard path {str(extra_source)!r} is not a directory."
+        )
+    for path in extra_source.rglob("*"):
+        if not path.is_file() or path.suffix.casefold() != ".json":
+            continue
+        relative_path = path.relative_to(extra_source)
+        if relative_path in planned_json:
+            raise RuntimeError(
+                f"Grafana dashboard {relative_path.as_posix()!r} from extra "
+                f"source {str(extra_source)!r} already exists in runtime dashboards."
+            )
+        planned_json.add(relative_path)
+
+    _copy_dashboard_directory(extra_source, target)
+    return target
+
+
+def _copy_dashboard_directory(source: Path, target: Path) -> None:
     for item in source.iterdir():
         destination = target / item.name
         if item.is_file():
@@ -783,16 +975,6 @@ def _stage_grafana_dashboards(conf: DictConfig, runtime_dir: Path) -> Path:
             if destination.exists() and not destination.is_dir():
                 destination.unlink()
             shutil.copytree(item, destination, dirs_exist_ok=True)
-
-    source_names = {item.name for item in source.iterdir()}
-    for item in list(target.iterdir()):
-        if item.name in source_names:
-            continue
-        if item.is_file():
-            item.unlink()
-        else:
-            shutil.rmtree(item)
-    return target
 
 
 def _service_specific_data_dir(conf: DictConfig, name: str, data_root: Path) -> Path:
@@ -859,6 +1041,9 @@ def _spawn_service(
     env = os.environ.copy()
     log_file.parent.mkdir(parents=True, exist_ok=True)
     stdout = log_file.open("ab")
+    creationflags = 0
+    if sys.platform == "win32":
+        creationflags = subprocess.CREATE_NO_WINDOW
     try:
         process = subprocess.Popen(
             list(command),
@@ -866,7 +1051,8 @@ def _spawn_service(
             stderr=subprocess.STDOUT,
             stdin=subprocess.DEVNULL,
             env=env,
-            start_new_session=True,
+            start_new_session=sys.platform != "win32",
+            creationflags=creationflags,
         )
         stdout.close()
         return process
@@ -878,6 +1064,10 @@ def _spawn_service(
 def _terminate_process(process: subprocess.Popen[Any]) -> None:
     if process.poll() is not None:
         return
+    if sys.platform == "win32":
+        _terminate_pid(process.pid)
+        process.wait(timeout=8)
+        return
     try:
         os.killpg(process.pid, signal.SIGTERM)
     except OSError:
@@ -887,6 +1077,23 @@ def _terminate_process(process: subprocess.Popen[Any]) -> None:
 
 def _terminate_pid(pid: int) -> None:
     if pid <= 0:
+        return
+    if sys.platform == "win32":
+        try:
+            parent = psutil.Process(pid)
+            processes = parent.children(recursive=True) + [parent]
+            for process in processes:
+                try:
+                    process.terminate()
+                except psutil.NoSuchProcess:
+                    pass
+            _, alive = psutil.wait_procs(processes, timeout=8)
+            if alive:
+                raise RuntimeError(
+                    f"Failed to stop processes: {[p.pid for p in alive]}"
+                )
+        except psutil.NoSuchProcess:
+            pass
         return
     try:
         os.killpg(pid, signal.SIGTERM)

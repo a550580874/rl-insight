@@ -17,13 +17,15 @@
 from __future__ import annotations
 
 import os
+import socket
+from contextlib import ExitStack
 
 import pytest
 import yaml
 from omegaconf import OmegaConf
 
 from rl_insight.server import runtime as runtime_module
-
+from rl_insight.utils.monitor_config_loader import load_server_config_file
 
 _render_prometheus_config = runtime_module._render_prometheus_config
 
@@ -311,3 +313,87 @@ def test_render_prometheus_config_should_not_leave_partial_targets_on_write_fail
         _render_prometheus_config(conf, runtime_dir)
 
     assert not targets_file.exists()
+
+
+@pytest.mark.parametrize("udp", [False, True])
+def test_auto_ports_and_rendered_config(tmp_path, udp):
+    conf = load_server_config_file()
+    keys = [
+        "server.port",
+        "prometheus.prometheus_port",
+        "grafana.port",
+        "tempo.query_port",
+        "otel.otel_port",
+        "tempo.grpc_port",
+        "tempo.memberlist_port",
+    ]
+    with ExitStack() as sockets:
+        occupied = sockets.enter_context(
+            socket.socket(type=socket.SOCK_DGRAM if udp else socket.SOCK_STREAM)
+        )
+        occupied.bind(("0.0.0.0", 0))
+        port = occupied.getsockname()[1]
+        for key in keys:
+            OmegaConf.update(conf, key, port)
+        runtime_module.LocalServiceRuntime(conf, tmp_path)._assign_ports()
+        assigned = [OmegaConf.select(conf, key) for key in keys]
+        assert len(set(assigned)) == 7
+        assert conf.tempo.memberlist_port != port
+        if not udp:
+            assert port not in assigned
+        for value in assigned:
+            sockets.enter_context(socket.socket()).bind(("0.0.0.0", value))
+        rendered = runtime_module._render_tempo_config(
+            conf, tmp_path, tmp_path, "2.6.1"
+        )
+        tempo = yaml.safe_load(rendered.read_text())
+        assert tempo["server"]["grpc_listen_port"] == conf.tempo.grpc_port
+        assert tempo["memberlist"]["bind_port"] == conf.tempo.memberlist_port
+
+
+@pytest.mark.parametrize("races", [0, 1, 3])
+def test_auto_port_real_start_retry_and_cleanup(tmp_path, monkeypatch, races):
+    conf = load_server_config_file()
+    for name in ("prometheus", "tempo", "grafana"):
+        conf[name].enable = False
+    conf.server.runtime_dir = str(tmp_path / "runtime")
+    conf.server.state_file = str(tmp_path / "state.json")
+    conf.server.data_dir = str(tmp_path / "data")
+    runtime = runtime_module.LocalServiceRuntime(conf, tmp_path)
+    spawn_service = runtime_module._spawn_service
+    processes = []
+    with ExitStack() as sockets:
+        occupied = sockets.enter_context(socket.socket())
+        occupied.bind(("0.0.0.0", 0))
+        occupied.listen()
+        conf.server.port = occupied.getsockname()[1]
+
+        def spawn(name, command, log_file):
+            if len(processes) < races:
+                blocker = sockets.enter_context(socket.socket())
+                blocker.bind(("0.0.0.0", conf.server.port))
+                blocker.listen()
+            process = spawn_service(name, command, log_file)
+            processes.append(process)
+            return process
+
+        monkeypatch.setattr(runtime_module, "_spawn_service", spawn)
+        try:
+            if races == 3:
+                with pytest.raises(runtime_module.PortConflictError):
+                    runtime.start(detach=True, attach_logs=False, auto_port=True)
+            else:
+                runtime.start(detach=True, attach_logs=False, auto_port=True)
+                assert conf.server.port != occupied.getsockname()[1]
+                assert (
+                    OmegaConf.load(tmp_path / "runtime/server.yaml").server.port
+                    == conf.server.port
+                )
+                assert runtime.stop()[0] == 0
+            assert len(processes) == min(races + 1, 3)
+            for process in processes:
+                process.wait(timeout=5)
+            assert not runtime.state_file.exists()
+        finally:
+            for process in processes:
+                runtime_module._terminate_process(process)
