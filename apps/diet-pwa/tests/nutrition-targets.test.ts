@@ -10,9 +10,50 @@ import {
   computeDayTargets,
   computeDefaultCalories,
   computeMealTargets,
+  startingCaloriesFor,
+  suggestedCaloriesFor,
 } from '../src/shared/nutrition/targets';
 
 const noPostWorkout = { carbs: 0, protein: 0, fat: 0 };
+
+describe('user calorie profile (MING-23 regression)', () => {
+  const profile = { baseCalories: 2000, baseWeightKg: 65, defaultCalories: 0 };
+
+  it('suggests from the user base weight and base calories, not the shipped defaults', () => {
+    // The settings page promises baseCalories x weight / baseWeight.
+    expect(suggestedCaloriesFor(75, profile)).toBe(2308);
+    expect(suggestedCaloriesFor(70, profile)).toBe(2154);
+    // Shipped defaults stay available and unchanged.
+    expect(suggestedCaloriesFor(75, { baseCalories: 1900, baseWeightKg: 70, defaultCalories: 0 })).toBe(2036);
+  });
+
+  it('falls back to the suggestion when no default target is stored', () => {
+    expect(startingCaloriesFor(75, { ...profile, defaultCalories: 0 })).toBe(2308);
+  });
+
+  it('starts a new day from the stored 默认热量目标', () => {
+    expect(startingCaloriesFor(75, { ...profile, defaultCalories: 1800 })).toBe(1800);
+  });
+
+  it('ignores a nonsensical default target', () => {
+    expect(startingCaloriesFor(75, { ...profile, defaultCalories: Number.NaN })).toBe(2308);
+    expect(startingCaloriesFor(75, { ...profile, defaultCalories: -10 })).toBe(2308);
+  });
+
+  it('exposes the shape of Settings so the client can pass it straight through', () => {
+    const settings = {
+      currentWeightKg: 75,
+      baseWeightKg: 65,
+      baseCalories: 2000,
+      suggestedCalories: 2308,
+      defaultCalories: 1800,
+      defaultTrainingDay: true,
+      defaultTrainingAfterMeal: 'lunch' as const,
+    };
+    expect(suggestedCaloriesFor(settings.currentWeightKg, settings)).toBe(settings.suggestedCalories);
+    expect(startingCaloriesFor(settings.currentWeightKg, settings)).toBe(settings.defaultCalories);
+  });
+});
 
 describe('daily macro targets', () => {
   it('Case 1: 70 kg training day -> 210C / 112P / 42F', () => {

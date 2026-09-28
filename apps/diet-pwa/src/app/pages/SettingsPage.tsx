@@ -1,12 +1,14 @@
 import { useEffect, useState } from 'react';
 import { api } from '../api';
 import type { SettingsInput, TrainingAfterMeal } from '../../shared/types';
+import { suggestedCaloriesFor } from '../../shared/nutrition/targets';
 import { Button, Card, Field, NumberField, SectionTitle, SegmentedControl, Toggle } from '../components/ui';
 import { useApp } from '../state/AppContext';
 
 export function SettingsPage() {
   const { settings, saveSettings, logout, notify } = useApp();
   const [draft, setDraft] = useState<SettingsInput | null>(null);
+  const [defaultCaloriesTouched, setDefaultCaloriesTouched] = useState(false);
   const [pinForm, setPinForm] = useState({ current: '', next: '' });
   const [busy, setBusy] = useState(false);
 
@@ -20,6 +22,7 @@ export function SettingsPage() {
       defaultTrainingDay: settings.defaultTrainingDay,
       defaultTrainingAfterMeal: settings.defaultTrainingAfterMeal,
     });
+    setDefaultCaloriesTouched(false);
   }, [settings]);
 
   if (!settings || !draft) return null;
@@ -29,7 +32,12 @@ export function SettingsPage() {
   const submit = async () => {
     setBusy(true);
     try {
-      await saveSettings(draft);
+      // 默认热量目标 keeps following the suggestion until the user edits it, so
+      // changing 基准体重 / 基准热量 also updates the target of new days (§3).
+      const payload: SettingsInput = defaultCaloriesTouched
+        ? draft
+        : { ...draft, defaultCalories: suggestedCaloriesFor(draft.currentWeightKg, draft) };
+      await saveSettings(payload);
     } finally {
       setBusy(false);
     }
@@ -81,14 +89,18 @@ export function SettingsPage() {
           <NumberField
             label="默认热量目标"
             value={draft.defaultCalories}
-            onChange={(value) => update({ defaultCalories: value })}
+            onChange={(value) => {
+              setDefaultCaloriesTouched(true);
+              update({ defaultCalories: value });
+            }}
             step={10}
             suffix="kcal"
           />
         </div>
         <p className="mt-2 text-[11px] text-slate-400">
-          建议热量 = 基准热量 × 当前体重 ÷ 基准体重 = {settings.suggestedCalories} kcal（1900 × 体重 ÷ 70）。
+          建议热量 = 基准热量 × 当前体重 ÷ 基准体重 = {settings.suggestedCalories} kcal。
           修改体重只会更新建议值，不会覆盖已记录的历史某天目标。
+          「默认热量目标」默认跟随建议热量，改动后按你填写的值作为新一天的目标。
         </p>
       </Card>
 
