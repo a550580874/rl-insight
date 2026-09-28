@@ -26,7 +26,9 @@ import {
 import type { AuthContext, Ctx } from '../env';
 import { HttpError, json, readJson } from '../http';
 
-const PIN_ITERATIONS = 210_000;
+// Cloudflare Workers WebCrypto rejects PBKDF2 counts above 100,000.
+// Use the highest portable runtime value rather than failing PIN setup online.
+const PIN_ITERATIONS = 100_000;
 
 function readPin(body: { pin?: unknown; newPin?: unknown }, field: 'pin' | 'newPin'): string {
   const raw = body[field];

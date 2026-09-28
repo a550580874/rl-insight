@@ -26,7 +26,7 @@ run_worker_first = ["/api/*"]
 binding = "DB"
 database_name = "diet-pwa"
 # Placeholder. Replace with the id printed by `wrangler d1 create diet-pwa`.
-database_id = "00000000-0000-0000-0000-000000000000"
+database_id = "0bf64f34-b247-4903-b3c3-7bb323449991"
 migrations_dir = "migrations"
 
 [dev]
