@@ -260,6 +260,100 @@ def test_materialize_writes_every_dashboard_and_creates_the_output_dir(
         )
 
 
+def two_dashboard_config(tmp_path: Path) -> Path:
+    """A config rendering two dashboards, ``first`` before ``second``."""
+    return write_config(
+        tmp_path,
+        module_source("m1", 1)
+        + module_source("m2", 2)
+        + "local composer = import '"
+        + COMPOSER.as_posix()
+        + "';\n"
+        "{\n"
+        "  first: composer.compose([m1], "
+        + DASHBOARD % ("['zone_m1']", "['m1-row']")
+        + "),\n"
+        "  second: composer.compose([m2], "
+        + DASHBOARD % ("['zone_m2']", "['m2-row']")
+        + "),\n"
+        "}\n",
+    )
+
+
+def test_materialize_overwrites_by_default(tmp_path: Path) -> None:
+    # Library and optional CLI compatibility: the default is still a plain
+    # write that replaces whatever is already at the target path.
+    config = compose_config(tmp_path, TWO_MODULES, FULL_DASHBOARD)
+    output_dir = tmp_path / "out"
+    output_dir.mkdir()
+    (output_dir / "compose.json").write_text("old\n", encoding="utf-8")
+    written = renderer.materialize_dashboards(config, output_dir)
+    assert written == [output_dir / "compose.json"]
+    assert json.loads((output_dir / "compose.json").read_text(encoding="utf-8"))[
+        "spec"
+    ]["title"] == "Toy dashboard"
+
+
+def test_materialize_without_overwrite_writes_when_no_target_exists(
+    tmp_path: Path,
+) -> None:
+    config = compose_config(tmp_path, TWO_MODULES, FULL_DASHBOARD)
+    output_dir = tmp_path / "nested" / "out"
+    written = renderer.materialize_dashboards(config, output_dir, overwrite=False)
+    assert written == [output_dir / "compose.json"]
+    assert (output_dir / "compose.json").is_file()
+
+
+def test_materialize_without_overwrite_rejects_an_existing_target(
+    tmp_path: Path,
+) -> None:
+    config = compose_config(tmp_path, TWO_MODULES, FULL_DASHBOARD)
+    output_dir = tmp_path / "out"
+    output_dir.mkdir()
+    existing = output_dir / "compose.json"
+    existing.write_text("pre-existing\n", encoding="utf-8")
+
+    with pytest.raises(renderer.JsonnetRenderError) as excinfo:
+        renderer.materialize_dashboards(config, output_dir, overwrite=False)
+
+    assert str(existing) in str(excinfo.value)
+    assert existing.read_text(encoding="utf-8") == "pre-existing\n"
+
+
+def test_materialize_without_overwrite_preflights_every_target(
+    tmp_path: Path,
+) -> None:
+    # The collision is on the second dashboard in render order: the first one
+    # must not be written either, because the check happens before any write.
+    config = two_dashboard_config(tmp_path)
+    output_dir = tmp_path / "out"
+    output_dir.mkdir()
+    colliding = output_dir / "second.json"
+    colliding.write_text("pre-existing\n", encoding="utf-8")
+
+    with pytest.raises(renderer.JsonnetRenderError) as excinfo:
+        renderer.materialize_dashboards(config, output_dir, overwrite=False)
+
+    assert str(colliding) in str(excinfo.value)
+    assert not (output_dir / "first.json").exists()
+    assert colliding.read_text(encoding="utf-8") == "pre-existing\n"
+
+
+def test_materialize_without_overwrite_lists_every_collision(tmp_path: Path) -> None:
+    config = two_dashboard_config(tmp_path)
+    output_dir = tmp_path / "out"
+    output_dir.mkdir()
+    for name in ("first", "second"):
+        (output_dir / f"{name}.json").write_text("pre-existing\n", encoding="utf-8")
+
+    with pytest.raises(renderer.JsonnetRenderError) as excinfo:
+        renderer.materialize_dashboards(config, output_dir, overwrite=False)
+
+    message = str(excinfo.value)
+    assert str(output_dir / "first.json") in message
+    assert str(output_dir / "second.json") in message
+
+
 def test_evaluation_failure_names_the_config_and_the_jsonnet_context(
     tmp_path: Path,
 ) -> None:

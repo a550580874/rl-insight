@@ -102,20 +102,38 @@ def generated_text(dashboard: Any) -> str:
     return json.dumps(dashboard, ensure_ascii=False, indent=2) + "\n"
 
 
-def materialize_dashboards(config: Path, output_dir: Path) -> list[Path]:
+def materialize_dashboards(
+    config: Path, output_dir: Path, *, overwrite: bool = True
+) -> list[Path]:
     """Render ``config`` and write one ``<dashboard-name>.json`` per dashboard.
 
     Returns the written paths in the order the config declares them. The
     output directory is created when missing.
+
+    With ``overwrite=False`` the rendering is additive: every target path is
+    computed up front and, if any of them already exists, nothing at all is
+    written and :class:`JsonnetRenderError` names the conflicting paths. The
+    check happens before the first write, so a collision never leaves a
+    partially materialized set behind.
     """
     dashboards = render_dashboards(config)
     output_dir = Path(output_dir)
+    targets = [(name, output_dir / f"{name}.json") for name in dashboards]
+
+    if not overwrite:
+        collisions = [path for _, path in targets if path.exists()]
+        if collisions:
+            raise JsonnetRenderError(
+                f"refusing to overwrite existing dashboard file(s) rendered "
+                f"from config {config}: "
+                + ", ".join(str(path) for path in collisions)
+            )
+
     output_dir.mkdir(parents=True, exist_ok=True)
 
     written: list[Path] = []
-    for name, dashboard in dashboards.items():
-        path = output_dir / f"{name}.json"
-        path.write_text(generated_text(dashboard), encoding="utf-8")
+    for name, path in targets:
+        path.write_text(generated_text(dashboards[name]), encoding="utf-8")
         written.append(path)
     return written
 
