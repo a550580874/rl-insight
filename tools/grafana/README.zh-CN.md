@@ -28,6 +28,17 @@ rl_insight/config/services/grafana/jsonnet/
     └── viz.libsonnet
 ```
 
+### Jsonnet 源文件
+
+| 文件 | 用途 | 通常由谁修改 |
+| --- | --- | --- |
+| `dashboard_compositions.libsonnet` | 生产 registry：每个 dashboard 的 `modules`，以及 dashboard 级 metadata、title、tags 与顺序 | Dashboard 开发者 —— 最常修改的文件 |
+| `dashboards/*.libsonnet` | 某个子系统的可复用 panels、rows 与 variables | 新增或修改该监控内容的人 |
+| `dashboards.jsonnet` | 稳定的生产入口：import registry 并 compose 所有已注册 dashboard | 通常不需要修改 |
+| `framework/composer.libsonnet` | 所有 dashboard 共享的通用 composition 语义 | 普通 dashboard 开发者不修改 |
+| `framework/viz.libsonnet` | 通用可视化默认值 | 仅在 framework 级可视化变更时修改 |
+| `dashboards/verify_modules.jsonnet` | 模块的迁移/结构/指纹校验 | 普通用户不修改 |
+
 ## 配置文件
 
 三个键都位于服务配置（`rl_insight/config/config.yaml`，或你自己的 `--config` 文件）的 `grafana:` 下。
@@ -45,7 +56,7 @@ rl_insight/config/services/grafana/jsonnet/
 3. **否则** —— 渲染随安装包一起发布的 Jsonnet 入口。
 4. **`extra_dashboard_dir` 始终最后合并**，叠加在 base source 的产物之上：递归复制、非法路径报错、与已暂存文件同名的 `.json` 会导致启动失败。
 
-第 1 和第 3 种情况下，包内自带的 dashboard 会先被暂存，渲染结果再覆盖 `verl` 目录，因此所有自带 dashboard 仍然被提供，Grafana 显示的目录结构与之前完全一致，而属于 Jsonnet 的文件始终是最新渲染的结果。
+第 1 和第 3 种情况下，包内自带的 dashboard 目录会先被暂存，渲染结果再写入 `verl` 目录。设置 `dashboard_config` 会替换内置的 VERL Jsonnet composition 层：包内 `verl` 目录会被跳过并根据该配置的产物重新生成，而其他自带目录（`quick_start_demo`、`agent_loop_trajectory`、`verl-omni`）仍然会被暂存。该层之外的每个自带 dashboard 仍然可用，Grafana 显示的目录结构保持不变，而属于 Jsonnet 的文件始终是最新渲染的结果。
 
 ## 内置 composition
 
@@ -70,9 +81,9 @@ verl_tainer_v1_with_sglang_engine = verlBase + [sglang]
 
 ## Dashboard 开发者场景
 
-三种场景都只是改源文件。没有“生成并提交”的步骤，也没有需要记住的命令 —— 下一次 `rl-insight server start` 就会渲染包内的当前内容。
+三种场景都是对随安装包发布的 Jsonnet 源文件做配置改动。改动后继续正常的 RL-Insight 开发/启动流程 —— dashboard 会在启动时自动 materialize。
 
-### 1. 仅用现有模块新增 dashboard
+### 1. 复用现有模块新增 dashboard
 
 在 `dashboard_compositions.libsonnet` 中加一个条目，其余都不用改。
 
@@ -94,7 +105,9 @@ verl_tainer_v1_with_sglang_engine = verlBase + [sglang]
 }
 ```
 
-### 2. 新增 engine 或新增内容
+随后继续正常的 RL-Insight 开发/启动流程 —— dashboard 会在启动时自动 materialize。
+
+### 2. 新增 Foo engine 或其他新内容
 
 1. 新增 `dashboards/foo.libsonnet`，写入该子系统的 panels、rows 与 variables。
 2. 在 `dashboard_compositions.libsonnet` 中 import 并注册一个 composition：
@@ -108,50 +121,99 @@ verl_tainer_v1_with_foo_engine: {
 
 3. 只有新增共享可视化类型或新增 composition 行为时，才需要改 `framework/` 里的通用资产。普通 dashboard 永远不需要改。
 
-### 3. 扩展现有内容
+随后继续正常的 RL-Insight 开发/启动流程 —— dashboard 会在启动时自动 materialize。
 
-复用某个模块并在其上追加内容。扩展是纯增量的：扩展不能隐式覆盖已有的 panel、row 或 variable。
+### 3. 用 `trainer_extra` 扩展 trainer dashboard
+
+保持 `trainer` 不变，在它旁边增加一个附属模块。`trainer_extra` 自己拥有新增的 panel 以及渲染它的 row；composition 里加上这个模块，并把新 row 写进 `rowOrder`。
 
 ```jsonnet
+// dashboards/trainer_extra.libsonnet —— trainer dashboard 的额外内容
 {
   panels: [{
-    key: 'training.custom.foo',
-    outputKey: 'panel-custom-foo',
+    key: 'training_extra.custom',
+    outputKey: 'panel-training-extra-custom',
     id: 500,
-    title: 'Custom Foo Metric',
-    queries: [{ expr: 'custom_foo_metric' }],
+    title: 'Custom training metric',
+    queries: [{ expr: 'custom_training_metric' }],
   }],
-  rowItems: {
-    'training metric': [{
-      kind: 'GridLayoutItem',
+  rows: {
+    'training extra metric': {
+      kind: 'RowsLayoutRow',
       spec: {
-        x: 0,
-        y: 100,
-        width: 12,
-        height: 8,
-        element: { kind: 'ElementReference', name: 'training.custom.foo' },
+        title: 'training extra metric',
+        collapse: false,
+        layout: {
+          kind: 'GridLayout',
+          spec: {
+            items: [{
+              kind: 'GridLayoutItem',
+              spec: {
+                x: 0,
+                y: 0,
+                width: 24,
+                height: 8,
+                element: {
+                  kind: 'ElementReference',
+                  name: 'training_extra.custom',
+                },
+              },
+            }],
+          },
+        },
       },
-    }],
+    },
   },
 }
 ```
 
-扩展自己拥有一个完整新区块时用 `rows`；向其它模块已创建的 row 追加 panel 时用 `rowItems`。
+```jsonnet
+// dashboard_compositions.libsonnet
+local trainer_extra = import 'dashboards/trainer_extra.libsonnet';
+
+{
+  compositions: {
+    verl_tainer_v1_with_vllm_engine: {
+      modules: verlBase + [trainer_extra, vllm, npu],
+      dashboard: {
+        // ... dashboard 级配置保持不变
+        rowOrder: [
+          'rl state timeline',
+          'training metric',
+          'vllm engine metric',
+          'transfer queue metric',
+          'hardware metric',
+          'training extra metric',
+        ],
+      },
+    },
+  },
+}
+```
+
+`rowItems` 是另一种增量形式：它把条目追加到 composition 已经渲染为 `GridLayout` row 的 row 上，因此不必把该 row 再写进 `rowOrder`。两种方式下扩展都无法隐式覆盖已有的 panel、row 或 variable —— row 扩展规则见 [`framework/README.md`](framework/README.md)。
+
+随后继续正常的 RL-Insight 开发/启动流程 —— dashboard 会在启动时自动 materialize。
 
 ## 用户自定义
 
+使用已安装包的用户只需要这三个键。它们都位于服务配置的 `grafana:` 下。
+
 | 你的需求 | 做法 |
 | --- | --- |
-| 在不改动安装包的前提下增加 dashboard | 把 `.json` 放进一个目录，用 `--extra-dashboard-dir <dir>` 指定。它会合并到内置 dashboard 之上。 |
-| 使用完全不同的 Jsonnet composition | 把 `grafana.dashboard_config` 指向你自己的 composition 配置。它会替换内置的 Jsonnet 层；无法渲染时启动失败。 |
+| 在不改动安装包的前提下增加 dashboard | 把 `.json` 放进一个目录，用 `--extra-dashboard-dir <dir>`（`grafana.extra_dashboard_dir`）指定。它会最后合并在 base source 之上。 |
+| 使用完全不同的 Jsonnet composition | 把 `grafana.dashboard_config` 指向你自己的 composition 配置。它会替换内置的 VERL Jsonnet composition 层；无法渲染时启动失败。 |
 | 只用你自己的静态 JSON | 把 `grafana.dashboards_dir` 指向你的目录；它会替换内置渲染。 |
-| 在项目本地安装中修改内置 dashboard | 直接改包内源文件（见开发者场景），然后重启服务栈。 |
 
-自定义 `dashboard_config` 可以用相对于其所在目录的路径 import 包内的 framework 与模块：
+Dashboard 开发者是另一个角色：他们在仓库里修改 Jsonnet 源文件，这些源文件随安装包一起发布。普通用户不修改 `site-packages`，而是使用上面的三个键。
+
+自定义 `dashboard_config` 是一个独立（standalone）的 Jsonnet 文件。renderer 就在它所在位置求值，不会额外添加任何 import path，因此文件内的 import 相对于该文件解析：要 import 包内的 composer 或模块，必须显式给出路径，例如使用已安装包的绝对路径。
 
 ```jsonnet
-local composer = import '../rl_insight/config/services/grafana/jsonnet/framework/composer.libsonnet';
-local npu = import '../rl_insight/config/services/grafana/jsonnet/dashboards/npu.libsonnet';
+// 使用下面命令输出的目录：
+//   python -c "import rl_insight, pathlib; print(pathlib.Path(rl_insight.__file__).parent)"
+local composer = import '<已安装的 rl_insight 目录>/config/services/grafana/jsonnet/framework/composer.libsonnet';
+local npu = import '<已安装的 rl_insight 目录>/config/services/grafana/jsonnet/dashboards/npu.libsonnet';
 
 {
   my_board: composer.compose([npu], {
@@ -164,6 +226,8 @@ local npu = import '../rl_insight/config/services/grafana/jsonnet/dashboards/npu
   }),
 }
 ```
+
+形如 `../rl_insight/config/services/grafana/jsonnet/...` 的相对路径只在配置文件位于源码 checkout 内时可用，它不是通用的已安装用户工作流。
 
 它的 dashboard 会渲染到与内置 composition 相同的 `verl` 目录。
 
@@ -199,29 +263,22 @@ Grafana
 
 ### 内部 / 调试
 
-`tools/grafana/generate_dashboards.py` 是同一个 renderer core 之上的可选薄封装。它不属于任何常规流程，只用于刷新已提交 JSON baseline 以及在 CI 中校验：
-
-```bash
-python tools/grafana/generate_dashboards.py            # 刷新 baseline
-python tools/grafana/generate_dashboards.py --check    # 语义漂移时退出码 1
-```
-
-`--check` 比较解析后的 JSON 对象，因此仅序列化顺序不同不会被误判。
+`tools/grafana/generate_dashboards.py` 是同一个 renderer core 之上的可选内部封装。它不属于任何常规流程 —— 普通用户和 dashboard 开发者都不会调用它。它的参数只记录在 `tools/grafana/framework/README.md` 和脚本自身的 `--help` 中。
 
 ## 各角色的变化
 
 | 角色 | 有什么变化 | 要做什么 |
 | --- | --- | --- |
 | RL-Insight / Grafana 用户 | 没有变化 | 像以前一样启动和使用；相同的 dashboard 仍出现在相同的 folder 中 |
-| Dashboard 开发者 | 改包内的 Jsonnet 模块或 registry | 重启服务栈 —— 启动时会渲染你的改动 |
+| Dashboard 开发者 | 仓库里的 Jsonnet 模块或 registry；这些源文件随安装包一起发布 | 继续正常的开发/启动流程 —— 启动时会 materialize 你的改动 |
 | 使用额外 dashboard 的用户 | 没有变化 | 继续使用 `--extra-dashboard-dir`；额外 dashboard 会合并在其上 |
 | 使用自定义 composition 的用户 | 设置 `grafana.dashboard_config` | 指向你的配置；配置有问题时启动会带清晰错误失败 |
 
 ## 限制
 
 - Composition 只能增量叠加，不支持隐式覆盖 panel/row/variable。要修改已有 panel，请改动拥有它的模块。
-- `rowItems` 只能向已存在且受支持的 `GridLayout` row 追加条目。
-- 自定义 `dashboard_config` 是普通 Jsonnet 文件，因此 import 包内 framework 与模块时必须使用相对于该文件的路径。
+- `rowItems` 只能把条目追加到 composition 中渲染为 `RowsLayoutRow` 且 layout 为 `GridLayout` 的 row；其他扩展目标会导致求值失败。
+- 自定义 `dashboard_config` 是独立（standalone）的 Jsonnet 文件：它必须用显式路径 import 包内的 composer 与模块，不能依赖包被加入任何 import path。
 - 已提交 JSON 是用于评审与 CI 的 baseline/reference，不是运行时来源；请改 Jsonnet 源而不是生成出来的文件。
 - Dashboard 在启动时渲染，因此 Jsonnet 错误表现为 `rl-insight server start` 失败，而不是 Grafana 中缺少某个 dashboard。
 

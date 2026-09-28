@@ -33,6 +33,17 @@ rl_insight/config/services/grafana/jsonnet/
     └── viz.libsonnet
 ```
 
+### Jsonnet source files
+
+| File | Purpose | Who normally changes it |
+| --- | --- | --- |
+| `dashboard_compositions.libsonnet` | Production registry: the `modules` of each dashboard plus its dashboard-level metadata, title, tags and ordering | Dashboard developer — the file changed most often |
+| `dashboards/*.libsonnet` | The reusable panels, rows and variables of one subsystem | Whoever adds or changes that monitoring content |
+| `dashboards.jsonnet` | Stable production entrypoint: imports the registry and composes every registered dashboard | Normally nobody |
+| `framework/composer.libsonnet` | Generic composition semantics shared by every dashboard | Not ordinary dashboard developers |
+| `framework/viz.libsonnet` | Generic visualization defaults | Only for a framework-level visualization change |
+| `dashboards/verify_modules.jsonnet` | Migration/structure/fingerprint verification of the modules | Not ordinary users |
+
 ## Configuration files
 
 All three keys live under `grafana:` in the server configuration
@@ -58,10 +69,14 @@ Precedence, applied at every start:
    source produced: recursive copy, invalid paths rejected, and a `.json` file
    that would collide with an already staged one stops startup.
 
-In cases 1 and 3 the dashboards bundled in the package are staged first and the
-rendered compositions are materialized over the `verl` folder, so every bundled
-dashboard is still served, the folder layout Grafana shows is unchanged, and the
-Jsonnet-owned files are always freshly rendered.
+In cases 1 and 3 the bundled dashboard folders are staged first and the
+rendered compositions are materialized into the `verl` folder. Setting
+`dashboard_config` replaces the built-in VERL Jsonnet composition layer: the
+bundled `verl` folder is skipped and regenerated from whatever the config
+produces, while the other bundled folders (`quick_start_demo`,
+`agent_loop_trajectory`, `verl-omni`) are still staged. Every bundled dashboard
+outside that layer keeps being served, the folder layout Grafana shows is
+unchanged, and the Jsonnet-owned files are always freshly rendered.
 
 ## Built-in compositions
 
@@ -87,11 +102,11 @@ Adding a dashboard is a registry entry; see the three developer cases below.
 
 ## Dashboard developer cases
 
-Every case is a source edit. There is no generate-and-commit step, and no
-command to remember — the next `rl-insight server start` renders what is in the
-package.
+Every case is a configuration change to the Jsonnet sources that ship with the
+install. After the change, continue the normal RL-Insight development/startup
+flow — the dashboard is materialized automatically at startup.
 
-### 1. A new dashboard from existing modules
+### 1. Reuse existing modules in a new dashboard
 
 Add one entry to `dashboard_compositions.libsonnet`; nothing else changes.
 
@@ -113,7 +128,10 @@ Add one entry to `dashboard_compositions.libsonnet`; nothing else changes.
 }
 ```
 
-### 2. A new engine or new content
+Then continue the normal RL-Insight development/startup flow — the dashboard is
+materialized automatically at startup.
+
+### 2. Add a Foo engine or other new content
 
 1. Add `dashboards/foo.libsonnet` with the panels, rows and variables of the new
    subsystem.
@@ -129,53 +147,114 @@ verl_tainer_v1_with_foo_engine: {
 3. For a new visualization type or new composition behavior, change the generic
    `framework/` assets. Ordinary dashboards never need this.
 
-### 3. Extend existing content
+Then continue the normal RL-Insight development/startup flow — the dashboard is
+materialized automatically at startup.
 
-Reuse a module and add to it. Extensions are additive: an extension cannot
-silently override a panel, row or variable.
+### 3. Extend the trainer dashboard with `trainer_extra`
+
+Keep `trainer` as it is and add a satellite module next to it. `trainer_extra`
+owns the extra panel and the row it is rendered in; the composition adds the
+module and names the new row in `rowOrder`.
 
 ```jsonnet
+// dashboards/trainer_extra.libsonnet — extra content for the trainer dashboard
 {
   panels: [{
-    key: 'training.custom.foo',
-    outputKey: 'panel-custom-foo',
+    key: 'training_extra.custom',
+    outputKey: 'panel-training-extra-custom',
     id: 500,
-    title: 'Custom Foo Metric',
-    queries: [{ expr: 'custom_foo_metric' }],
+    title: 'Custom training metric',
+    queries: [{ expr: 'custom_training_metric' }],
   }],
-  rowItems: {
-    'training metric': [{
-      kind: 'GridLayoutItem',
+  rows: {
+    'training extra metric': {
+      kind: 'RowsLayoutRow',
       spec: {
-        x: 0,
-        y: 100,
-        width: 12,
-        height: 8,
-        element: { kind: 'ElementReference', name: 'training.custom.foo' },
+        title: 'training extra metric',
+        collapse: false,
+        layout: {
+          kind: 'GridLayout',
+          spec: {
+            items: [{
+              kind: 'GridLayoutItem',
+              spec: {
+                x: 0,
+                y: 0,
+                width: 24,
+                height: 8,
+                element: {
+                  kind: 'ElementReference',
+                  name: 'training_extra.custom',
+                },
+              },
+            }],
+          },
+        },
       },
-    }],
+    },
   },
 }
 ```
 
-Use `rows` when the extension owns a whole new section, and `rowItems` to append
-panels to a row another module already created.
+```jsonnet
+// dashboard_compositions.libsonnet
+local trainer_extra = import 'dashboards/trainer_extra.libsonnet';
+
+{
+  compositions: {
+    verl_tainer_v1_with_vllm_engine: {
+      modules: verlBase + [trainer_extra, vllm, npu],
+      dashboard: {
+        // ... unchanged dashboard-level config
+        rowOrder: [
+          'rl state timeline',
+          'training metric',
+          'vllm engine metric',
+          'transfer queue metric',
+          'hardware metric',
+          'training extra metric',
+        ],
+      },
+    },
+  },
+}
+```
+
+`rowItems` is the other additive form: it appends items to a row the composition
+already renders as a `GridLayout` row, so that row does not have to be named in
+`rowOrder` again. Either way an extension cannot silently override an existing
+panel, row or variable — see [`framework/README.md`](framework/README.md) for the
+row-extension rules.
+
+Then continue the normal RL-Insight development/startup flow — the dashboard is
+materialized automatically at startup.
 
 ## User customization
 
+These three keys are what a user of an installed package needs. They all live
+under `grafana:` in the server configuration.
+
 | You want | Do this |
 | --- | --- |
-| Extra dashboards without touching the installed package | Put the `.json` files in a directory and pass `--extra-dashboard-dir <dir>`. It is merged on top of the built-in dashboards. |
-| A completely different Jsonnet composition | Set `grafana.dashboard_config` to your own composition config. It replaces the built-in Jsonnet layer and stops startup if it cannot be rendered. |
+| Extra dashboards without touching the installed package | Put the `.json` files in a directory and pass `--extra-dashboard-dir <dir>` (`grafana.extra_dashboard_dir`). It is merged on top of the base source, last. |
+| A completely different Jsonnet composition | Set `grafana.dashboard_config` to your own composition config. It replaces the built-in VERL Jsonnet composition layer and stops startup if it cannot be rendered. |
 | To serve only your own static JSON | Set `grafana.dashboards_dir` to your directory; it replaces the built-in render. |
-| To change the built-in dashboards for a project-local install | Edit the package sources (see the developer cases) and restart the stack. |
 
-A custom `dashboard_config` may import the packaged framework and modules with a
-relative path from where you keep it:
+Dashboard developers are a different role: they change the Jsonnet sources in
+the repository, and those sources ship with the install. An ordinary user does
+not edit `site-packages`; use the keys above instead.
+
+A custom `dashboard_config` is a standalone Jsonnet file. The renderer evaluates
+it where it lies and adds no import path of its own, so the imports inside it
+resolve relative to that file: a config that imports the packaged composer or
+modules has to point at them explicitly, for example with the absolute path of
+the installed package.
 
 ```jsonnet
-local composer = import '../rl_insight/config/services/grafana/jsonnet/framework/composer.libsonnet';
-local npu = import '../rl_insight/config/services/grafana/jsonnet/dashboards/npu.libsonnet';
+// Use the directory reported by:
+//   python -c "import rl_insight, pathlib; print(pathlib.Path(rl_insight.__file__).parent)"
+local composer = import '<installed rl_insight dir>/config/services/grafana/jsonnet/framework/composer.libsonnet';
+local npu = import '<installed rl_insight dir>/config/services/grafana/jsonnet/dashboards/npu.libsonnet';
 
 {
   my_board: composer.compose([npu], {
@@ -188,6 +267,10 @@ local npu = import '../rl_insight/config/services/grafana/jsonnet/dashboards/npu
   }),
 }
 ```
+
+A relative form such as `../rl_insight/config/services/grafana/jsonnet/...` only
+works while the config sits inside a source checkout; it is not a general
+installed-user workflow.
 
 Its dashboards are rendered into the same `verl` folder as the built-in
 compositions.
@@ -229,24 +312,17 @@ file never leaves a stale dashboard behind.
 
 ### Internal / debugging
 
-`tools/grafana/generate_dashboards.py` is an optional wrapper over the same
-renderer core. It is not part of any normal workflow; it exists to refresh the
-committed JSON baseline and to check it in CI:
-
-```bash
-python tools/grafana/generate_dashboards.py            # refresh the baseline
-python tools/grafana/generate_dashboards.py --check    # exit 1 on semantic drift
-```
-
-`--check` compares parsed JSON objects, so serialization-only key-order
-differences are ignored.
+`tools/grafana/generate_dashboards.py` is an optional internal wrapper over the
+same renderer core the runtime uses. It is not part of any normal workflow —
+ordinary users and dashboard developers never call it. Its arguments live in
+`tools/grafana/framework/README.md` and in the script's `--help`.
 
 ## Changes by role
 
 | Role | What changes | What to do |
 | --- | --- | --- |
 | RL-Insight / Grafana user | Nothing | Start and use RL-Insight as before; the same dashboards appear in the same folders |
-| Dashboard developer | Edit Jsonnet modules or the registry in the package | Restart the stack — startup renders your change |
+| Dashboard developer | The Jsonnet modules or the registry in the repository; those sources ship with the install | Continue the normal development/startup flow — startup materializes your change |
 | User with extra dashboards | Nothing | Keep using `--extra-dashboard-dir`; extra dashboards are merged on top |
 | User with a custom composition | Set `grafana.dashboard_config` | Point it at your config; a broken config fails startup with a clear error |
 
@@ -254,9 +330,12 @@ differences are ignored.
 
 - Composition is additive only; implicit panel/row/variable overrides are not
   supported. To change an existing panel, edit the module that owns it.
-- `rowItems` only appends items to an existing supported `GridLayout` row.
-- A custom `dashboard_config` is a plain Jsonnet file, so imports of the
-  packaged framework and modules must use paths relative to that file.
+- `rowItems` only appends items to a row the composition renders as a
+  `RowsLayoutRow` with a `GridLayout` layout; other extension targets fail
+  evaluation.
+- A custom `dashboard_config` is a standalone Jsonnet file: it has to import the
+  packaged composer and modules by explicit path, and cannot rely on the
+  package being added to any import path.
 - The committed JSON is a baseline/reference for review and CI, not the runtime
   source; edit the Jsonnet sources instead of the generated files.
 - Dashboards are rendered at startup, so a Jsonnet error surfaces as a failed
