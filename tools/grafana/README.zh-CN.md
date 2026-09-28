@@ -2,16 +2,16 @@
 
 > **英文版本：[README.md](README.md)**
 
-RL-Insight 的 Grafana dashboard 以 Jsonnet composition 源的形式随安装包一起发布。服务启动时把它们渲染到 runtime 目录，并让 Grafana provisioning 指向该目录；因此改动 dashboard 就是改动源文件 —— 任何人都不需要先生成并提交 JSON。
+RL-Insight 的 Grafana dashboard 目前有两种形式并存：安装包里原有的静态 JSON，以及同样随安装包发布的 Jsonnet composition 源。服务启动时，runtime 先把静态 JSON 完整复制到 runtime 目录，再把 Jsonnet 渲染成额外的 dashboard 放在旁边，最后让 Grafana provisioning 指向该目录。改动 dashboard 就是改动源文件 —— 任何人都不需要先生成并提交 JSON。
 
 ## 概览
 
 | | |
 | --- | --- |
-| 事实来源 | 安装包内的 `rl_insight/config/services/grafana/jsonnet/` |
-| 由谁渲染 | `rl_insight/server/runtime.py`，在每次 `rl-insight server start` 时 |
+| Dashboard 来源 | 静态 JSON：`rl_insight/config/services/grafana/dashboards/`；Jsonnet composition 源：`rl_insight/config/services/grafana/jsonnet/` |
+| 由谁准备 | `rl_insight/server/runtime.py`，在每次 `rl-insight server start` 时：先完整复制静态 JSON，再渲染 Jsonnet |
 | Jsonnet 依赖 | `rjsonnet`，一个普通的 Python 依赖 —— 不需要 CLI、不需要 Go、不需要编译器 |
-| 已提交 JSON | `rl_insight/config/services/grafana/dashboards/` —— 保留为语义 baseline/reference，不再是运行时来源 |
+| 两者的关系 | 迁移阶段并存：静态 JSON 仍是正式可加载的 dashboard；Jsonnet 版本是启动时自动生成的额外 dashboard，文件名与 Grafana identity 都与静态版不同 |
 
 内容被拆分为可复用模块（某个子系统的 panels、rows、variables）和一个 composition registry，后者声明一个 dashboard 由哪些模块组成。运行时把它们合并为完整的 Grafana dashboard。
 
@@ -37,7 +37,27 @@ rl_insight/config/services/grafana/jsonnet/
 | `dashboards.jsonnet` | 稳定的生产入口：import registry 并 compose 所有已注册 dashboard | 通常不需要修改 |
 | `framework/composer.libsonnet` | 所有 dashboard 共享的通用 composition 语义 | 普通 dashboard 开发者不修改 |
 | `framework/viz.libsonnet` | 通用可视化默认值 | 仅在 framework 级可视化变更时修改 |
-| `dashboards/verify_modules.jsonnet` | 模块的迁移/结构/指纹校验 | 普通用户不修改 |
+| `dashboards/verify_modules.jsonnet` | 本次迁移临时的结构/指纹校验文件，计划在合并前删除 | 普通用户不修改 |
+
+## 默认启动结果
+
+如果只是使用现有 dashboard，不需要修改任何配置：
+
+```bash
+rl-insight server start
+```
+
+启动后 `<runtime_dir>/dashboards/verl/` 会同时包含四个 dashboard：
+
+```text
+<runtime_dir>/dashboards/verl/
+├── verl_tainer_v1_with_vllm_engine.json            原有静态 JSON
+├── verl_tainer_v1_with_sglang_engine.json          原有静态 JSON
+├── verl_tainer_v1_with_vllm_engine_jsonnet.json    Jsonnet 自动生成
+└── verl_tainer_v1_with_sglang_engine_jsonnet.json  Jsonnet 自动生成
+```
+
+前两个是包内原有的静态 JSON 原样复制，后两个是启动时由 Jsonnet 生成的新 dashboard。Grafana provisioning 扫描整个 `<runtime_dir>/dashboards/`（`foldersFromFilesStructure=true`），因此四个 dashboard 都会被加载，用户可以在 Grafana 中同时打开原版和 Jsonnet 版。Jsonnet 版 title 带 `_jsonnet` 后缀，便于在 Grafana UI 中区分。
 
 ## 配置文件
 
@@ -46,17 +66,17 @@ rl_insight/config/services/grafana/jsonnet/
 | 键 | 默认值 | 含义 |
 | --- | --- | --- |
 | `grafana.dashboard_config` | 空 | 要渲染的 Jsonnet composition 配置。为空时渲染包内自带的入口。 |
-| `grafana.dashboards_dir` | 包内 `config/services/grafana/dashboards` | 不渲染、改为复制的静态 JSON 目录。 |
+| `grafana.dashboards_dir` | 包内 `config/services/grafana/dashboards` | 完全替换默认 dashboard 来源的静态 JSON 目录（legacy 模式）。 |
 | `grafana.extra_dashboard_dir` | 未设置 | 在 base source 之上合并的额外 JSON dashboard。也可用 `--extra-dashboard-dir` 指定。 |
 
 每次启动时按以下优先级生效：
 
-1. **`dashboard_config` 非空** —— 渲染该 Jsonnet 配置。文件缺失或 Jsonnet 报错会在 Grafana 启动前停止启动，并在错误信息中给出该配置路径。
-2. **`dashboards_dir` 指向包内默认目录以外的位置** —— 原样复制该目录。这是 legacy 静态工作流；若配置的目录不存在或不是目录，则停止启动。
-3. **否则** —— 渲染随安装包一起发布的 Jsonnet 入口。
-4. **`extra_dashboard_dir` 始终最后合并**，叠加在 base source 的产物之上：递归复制、非法路径报错、与已暂存文件同名的 `.json` 会导致启动失败。
+1. **`dashboard_config` 非空** —— 完整暂存包内静态 dashboard，跳过包内自带的 Jsonnet 入口，只渲染该 Jsonnet 配置并把产物放在静态 dashboard 旁边。文件缺失或 Jsonnet 报错会在 Grafana 启动前停止启动，并在错误信息中给出该配置路径。
+2. **`dashboards_dir` 指向包内默认目录以外的位置** —— 只原样复制该目录（legacy/静态模式）：既不暂存包内静态 dashboard，也不运行包内 Jsonnet。这是完全替换默认 dashboard 来源的 legacy 工作流；若配置的目录不存在或不是目录，则停止启动。
+3. **否则（默认）** —— 完整暂存包内静态 dashboard，再把包内 Jsonnet 入口渲染成额外 dashboard 放在它们旁边。
+4. **`extra_dashboard_dir` 始终最后合并**，叠加在 base source 的产物之上：递归复制、非法路径报错、与已暂存文件同名的 `.json`（无论来自静态 dashboard、Jsonnet 渲染产物还是额外目录）都会导致启动失败。
 
-第 1 和第 3 种情况下，包内自带的 dashboard 目录会先被暂存，渲染结果再写入 `verl` 目录。设置 `dashboard_config` 会替换内置的 VERL Jsonnet composition 层：包内 `verl` 目录会被跳过并根据该配置的产物重新生成，而其他自带目录（`quick_start_demo`、`agent_loop_trajectory`、`verl-omni`）仍然会被暂存。该层之外的每个自带 dashboard 仍然可用，Grafana 显示的目录结构保持不变，而属于 Jsonnet 的文件始终是最新渲染的结果。
+默认（第 3 种）情况下无需任何配置改动。`dashboard_config` 的语义是替换内置的 Jsonnet composition 集，而不是替换全部自带 dashboard：其他自带目录（`quick_start_demo`、`agent_loop_trajectory`、`verl-omni`）以及 `verl/` 下的静态 dashboard 仍然会被暂存。Jsonnet 渲染是增量写入 —— 它只新增文件，绝不覆盖已暂存的静态 JSON；一旦输出路径与已暂存文件冲突，启动会直接失败。
 
 ## 内置 composition
 
@@ -73,9 +93,11 @@ rl_insight/config/services/grafana/jsonnet/
 共享基础为 `verlBase = [trainer, controller, storage, trajectory]`，已注册的两个生产 composition 为：
 
 ```text
-verl_tainer_v1_with_vllm_engine   = verlBase + [vllm, npu]
-verl_tainer_v1_with_sglang_engine = verlBase + [sglang]
+verl_tainer_v1_with_vllm_engine_jsonnet   = verlBase + [vllm, npu]
+verl_tainer_v1_with_sglang_engine_jsonnet = verlBase + [sglang]
 ```
+
+`_jsonnet` 后缀同时出现在 registry key、输出文件名和 dashboard title 中，并且 Jsonnet 版本固定使用与静态 dashboard 不同的 `metadata.name`，因此 Grafana 会把两者识别为各自独立的 dashboard。SGLang Jsonnet 版本保持与已有 SGLang dashboard 内容一致，所以暂未额外加入 NPU module。
 
 新增 dashboard 就是在 registry 里加一个条目；见下面三种开发者场景。
 
@@ -173,7 +195,7 @@ local trainer_extra = import 'dashboards/trainer_extra.libsonnet';
 
 {
   compositions: {
-    verl_tainer_v1_with_vllm_engine: {
+    verl_tainer_v1_with_vllm_engine_jsonnet: {
       modules: verlBase + [trainer_extra, vllm, npu],
       dashboard: {
         // ... dashboard 级配置保持不变
@@ -202,8 +224,8 @@ local trainer_extra = import 'dashboards/trainer_extra.libsonnet';
 | 你的需求 | 做法 |
 | --- | --- |
 | 在不改动安装包的前提下增加 dashboard | 把 `.json` 放进一个目录，用 `--extra-dashboard-dir <dir>`（`grafana.extra_dashboard_dir`）指定。它会最后合并在 base source 之上。 |
-| 使用完全不同的 Jsonnet composition | 把 `grafana.dashboard_config` 指向你自己的 composition 配置。它会替换内置的 VERL Jsonnet composition 层；无法渲染时启动失败。 |
-| 只用你自己的静态 JSON | 把 `grafana.dashboards_dir` 指向你的目录；它会替换内置渲染。 |
+| 使用完全不同的 Jsonnet composition | 把 `grafana.dashboard_config` 指向你自己的 composition 配置。它会替换内置的 Jsonnet composition 集（不是全部自带 dashboard）；产物与静态 dashboard 同名时启动失败。 |
+| 只用你自己的静态 JSON | 把 `grafana.dashboards_dir` 指向你的目录；它会完全替换默认 dashboard 来源 —— 不再暂存包内静态 dashboard，也不再运行内置 Jsonnet。 |
 
 Dashboard 开发者是另一个角色：他们在仓库里修改 Jsonnet 源文件，这些源文件随安装包一起发布。普通用户不修改 `site-packages`，而是使用上面的三个键。
 
@@ -240,10 +262,16 @@ rl-insight server start
         ▼
 <runtime_dir>/dashboards  （每次启动都完全重建）
         │
-        │ BASE SOURCE（基础来源）—— 要么是自带 dashboard 加一次 Jsonnet 渲染，
-        │ 要么是 grafana.dashboards_dir 的 legacy 静态复制
+        │ STATIC FIRST（先放静态）—— 包内 dashboard 目录完整复制，
+        │ 包括 verl/ 下的已提交静态 JSON；不跳过、不替换、不删除
         ▼
-<runtime_dir>/dashboards/verl/*.json  （渲染出的 <dashboard-name>.json）
+<runtime_dir>/dashboards/verl/*.json  （静态 dashboard）
+        │
+        │ JSONNET ALONGSIDE（Jsonnet 并列添加）—— 在进程内渲染包内 Jsonnet
+        │ 入口，生成 <dashboard-name>_jsonnet.json；只新增文件，
+        │ 与已暂存文件同名的输出会直接让启动失败
+        ▼
+<runtime_dir>/dashboards/verl/*.json  （静态 + Jsonnet 两套 dashboard）
         │
         │ MERGED（合并）—— grafana.extra_dashboard_dir 最后复制到其上
         ▼
@@ -257,7 +285,7 @@ Grafana
     每个子目录加载为一个 folder，并展示其中的 dashboard
 ```
 
-渲染在进程内通过 `rl_insight.grafana.renderer`（`rjsonnet.evaluate_file`）完成，从不调用外部进程；运行时只写 `<runtime_dir>`，包内源文件、已提交 JSON 和配置都只是只读输入。
+渲染在进程内通过 `rl_insight.grafana.renderer`（`rjsonnet.evaluate_file`）完成，从不调用外部进程；运行时只写 `<runtime_dir>`，包内源文件、已提交 JSON 和配置都只是只读输入。Jsonnet 渲染是增量写入，因此静态 dashboard 永远不会被覆盖或删除。
 
 `<runtime_dir>` 是服务运行时目录（默认 `~/.rl-insight/runtime`），dashboard 在每次启动时重建，因此删除源文件不会残留旧 dashboard。
 
@@ -269,7 +297,7 @@ Grafana
 
 | 角色 | 有什么变化 | 要做什么 |
 | --- | --- | --- |
-| RL-Insight / Grafana 用户 | 没有变化 | 像以前一样启动和使用；相同的 dashboard 仍出现在相同的 folder 中 |
+| RL-Insight / Grafana 用户 | 没有变化 | 像以前一样启动和使用；原来的 dashboard 仍出现在相同的 folder 中，另外多了启动时自动生成的 Jsonnet 版本 |
 | Dashboard 开发者 | 仓库里的 Jsonnet 模块或 registry；这些源文件随安装包一起发布 | 继续正常的开发/启动流程 —— 启动时会 materialize 你的改动 |
 | 使用额外 dashboard 的用户 | 没有变化 | 继续使用 `--extra-dashboard-dir`；额外 dashboard 会合并在其上 |
 | 使用自定义 composition 的用户 | 设置 `grafana.dashboard_config` | 指向你的配置；配置有问题时启动会带清晰错误失败 |
@@ -279,7 +307,7 @@ Grafana
 - Composition 只能增量叠加，不支持隐式覆盖 panel/row/variable。要修改已有 panel，请改动拥有它的模块。
 - `rowItems` 只能把条目追加到 composition 中渲染为 `RowsLayoutRow` 且 layout 为 `GridLayout` 的 row；其他扩展目标会导致求值失败。
 - 自定义 `dashboard_config` 是独立（standalone）的 Jsonnet 文件：它必须用显式路径 import 包内的 composer 与模块，不能依赖包被加入任何 import path。
-- 已提交 JSON 是用于评审与 CI 的 baseline/reference，不是运行时来源；请改 Jsonnet 源而不是生成出来的文件。
+- 仓库中原有的静态 JSON 继续作为正式可加载的 dashboard 保留；Jsonnet 版本作为新增 dashboard 在启动时自动生成，两者在当前迁移阶段并存。请改 Jsonnet 源，而不是手工编辑生成出来的文件。
 - Dashboard 在启动时渲染，因此 Jsonnet 错误表现为 `rl-insight server start` 失败，而不是 Grafana 中缺少某个 dashboard。
 
 通用 composition 规则与 framework 内部细节见
