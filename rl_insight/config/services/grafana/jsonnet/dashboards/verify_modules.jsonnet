@@ -63,19 +63,31 @@ assert fingerprint(sglang.variables) == '70d60ff7ccb33170c0b53f19140d5f21'
 // The registry is the only dashboard-config entrypoint; the migrated config
 // content must be the same object that used to live in
 // dashboard_configs.libsonnet (same {vllm, sglang} shape and fingerprint).
+//
+// The Jsonnet dashboards are separate Grafana resources materialized beside
+// the committed static JSON, so their identity fields (`metadata.name` and the
+// dashboard `title`) intentionally differ from the static ones. Those two
+// fields are normalized away here; this check still guards the remaining
+// metadata/chrome/ordering, and the panel, row and variable fingerprints above
+// guard the monitoring content itself.
 local compositions = registry.compositions;
+local withoutIdentity(dashboard) =
+  dashboard {
+    metadata: dashboard.metadata { name: null },
+    title: null,
+  };
 local migratedConfigs = {
-  vllm: compositions.verl_tainer_v1_with_vllm_engine.dashboard,
-  sglang: compositions.verl_tainer_v1_with_sglang_engine.dashboard,
+  vllm: withoutIdentity(compositions.verl_tainer_v1_with_vllm_engine_jsonnet.dashboard),
+  sglang: withoutIdentity(compositions.verl_tainer_v1_with_sglang_engine_jsonnet.dashboard),
 };
-assert fingerprint(migratedConfigs) == 'aaca26665ba894b549ca5b7b238624d5'
+assert fingerprint(migratedConfigs) == '0444864c6c25f645557040dd3aadd681'
        : 'dashboard metadata, chrome, or ordering changed';
 
 // Composition-level checks run over the ACTUAL aggregate module objects held
 // by each registry entry (not over module-name strings): the aggregate must
 // match the reassembled module lists and stay conflict-free.
-local vllmAggregate = compositions.verl_tainer_v1_with_vllm_engine.modules;
-local sglangAggregate = compositions.verl_tainer_v1_with_sglang_engine.modules;
+local vllmAggregate = compositions.verl_tainer_v1_with_vllm_engine_jsonnet.modules;
+local sglangAggregate = compositions.verl_tainer_v1_with_sglang_engine_jsonnet.modules;
 local expectedVllmAggregate = sharedModules + [vllm, npu];
 local expectedSglangAggregate = sharedModules + [sglang];
 

@@ -28,7 +28,7 @@ import socket
 import subprocess
 import sys
 import time
-from collections.abc import Collection, Sequence
+from collections.abc import Sequence
 from contextlib import ExitStack, contextmanager
 from dataclasses import dataclass
 from pathlib import Path
@@ -932,13 +932,16 @@ def _prepare_grafana_dashboards(conf: DictConfig, runtime_dir: Path) -> Path:
     1. a non-empty ``grafana.dashboard_config`` renders that Jsonnet config; a
        missing file or a Jsonnet error stops startup before Grafana runs;
     2. otherwise a ``grafana.dashboards_dir`` that points somewhere other than
-       the bundled default directory is copied as-is (legacy static workflow);
+       the bundled default directory is copied as-is (legacy static workflow),
+       and no built-in Jsonnet runs;
     3. otherwise the Jsonnet entrypoint bundled in the installed package is
        rendered — no CLI, no generated files on disk to keep in sync.
 
-    In cases 1 and 3 the packaged dashboards are staged first and the rendered
-    compositions are materialized over them, so every bundled dashboard is
-    still served and the Jsonnet-owned files are always freshly rendered.
+    In cases 1 and 3 the bundled static dashboards are staged first and the
+    Jsonnet dashboards are added alongside them as separate resources: the
+    Jsonnet render never overwrites a staged file, so a composition that would
+    land on an existing path aborts the startup instead. In case 2 only the
+    configured directory is copied.
 
     ``grafana.extra_dashboard_dir`` is merged on top of whichever base source
     applies, last, and keeps its recursive copy, invalid-path and filename
@@ -994,19 +997,23 @@ def _jsonnet_output_dir(target: Path) -> Path:
 def _stage_bundled_dashboards(target: Path) -> None:
     """Stage the dashboards that ship inside the installed package.
 
-    The folder the Jsonnet layer owns is skipped: it is regenerated from the
-    package sources, so staging the committed baseline there could only leave
-    a stale dashboard behind after a composition is renamed or removed.
+    The whole bundled directory is copied, including the ``verl`` folder that
+    holds the committed static dashboards. Those stay the official dashboards
+    users already have; the Jsonnet render adds further dashboards next to them
+    instead of replacing them, so nothing here may be skipped or overwritten.
     """
     source = MonitorPaths.GRAFANA_DASHBOARDS_DIR.resolve()
     if source != target and source.is_dir():
-        _copy_dashboard_directory(
-            source, target, skip={MonitorPaths.GRAFANA_JSONNET_OUTPUT_SUBDIR}
-        )
+        _copy_dashboard_directory(source, target)
 
 
 def _materialize_dashboards(config: Path, target: Path) -> None:
     """Render a Jsonnet composition config into the runtime dashboards dir.
+
+    The rendering is additive (``overwrite=False``): the bundled static
+    dashboards are already staged, so a composition whose output filename
+    collides with one of them fails the startup before Grafana runs instead of
+    replacing a committed dashboard.
 
     The renderer keeps the config path and the Jsonnet evaluation context in
     its message, so a broken config fails the startup with an actionable error
@@ -1015,7 +1022,7 @@ def _materialize_dashboards(config: Path, target: Path) -> None:
     if not config.is_file():
         raise RuntimeError(f"Grafana dashboard config {str(config)!r} does not exist.")
     try:
-        materialize_dashboards(config, target)
+        materialize_dashboards(config, target, overwrite=False)
     except JsonnetRenderError as error:
         raise RuntimeError(f"Grafana dashboard generation failed: {error}") from error
 
@@ -1056,12 +1063,8 @@ def _merge_extra_dashboards(conf: DictConfig, target: Path) -> None:
     _copy_dashboard_directory(extra_source, target)
 
 
-def _copy_dashboard_directory(
-    source: Path, target: Path, *, skip: Collection[str] = ()
-) -> None:
+def _copy_dashboard_directory(source: Path, target: Path) -> None:
     for item in source.iterdir():
-        if item.name in skip:
-            continue
         destination = target / item.name
         if item.is_file():
             if destination.is_dir():

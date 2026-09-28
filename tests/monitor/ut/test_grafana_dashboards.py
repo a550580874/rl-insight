@@ -69,7 +69,7 @@ def _renderer():
     return pytest.importorskip("rl_insight.grafana.renderer")
 
 
-def _write_custom_config(directory: Path) -> Path:
+def _write_custom_config(directory: Path, name: str = "custom_board") -> Path:
     """Write a user composition config that imports the packaged framework."""
     composer = os.path.relpath(
         JSONNET_DIR / "framework" / "composer.libsonnet", directory
@@ -82,9 +82,9 @@ local composer = import '{composer}';
 local npu = import '{npu}';
 
 {{
-  custom_board: composer.compose([npu], {{
-    metadata: {{ name: 'custom-board', labels: {{}}, annotations: {{}} }},
-    title: 'custom_board',
+  {name}: composer.compose([npu], {{
+    metadata: {{ name: '{name}', labels: {{}}, annotations: {{}} }},
+    title: '{name}',
     tags: ['RL-Insight'],
     spec: {{ cursorSync: 'Crosshair' }},
     variableOrder: ['npu_instance'],
@@ -95,6 +95,22 @@ local npu = import '{npu}';
         encoding="utf-8",
     )
     return config
+
+
+def _static_dashboard(name: str) -> Path:
+    """The committed static dashboard the bundled ``verl`` folder ships."""
+    return JSONNET_OUTPUT_DIR / f"{name}.json"
+
+
+def _read_json(path: Path) -> dict:
+    return json.loads(path.read_text(encoding="utf-8"))
+
+
+def _without_identity(dashboard: dict) -> dict:
+    """Blank the two fields a Jsonnet dashboard is allowed to change."""
+    dashboard["metadata"]["name"] = None
+    dashboard["spec"]["title"] = None
+    return dashboard
 
 
 # --------------------------------------------------------------------------
@@ -109,15 +125,34 @@ def test_prepare_renders_bundled_compositions_without_any_cli(tmp_path) -> None:
 
     rendered = renderer.render_dashboards(MonitorPaths.GRAFANA_JSONNET_ENTRYPOINT)
     assert set(rendered) == {
-        "verl_tainer_v1_with_sglang_engine",
-        "verl_tainer_v1_with_vllm_engine",
+        "verl_tainer_v1_with_sglang_engine_jsonnet",
+        "verl_tainer_v1_with_vllm_engine_jsonnet",
     }
-    # Rendered into the same Grafana folder the committed baseline used.
-    assert (staged / "verl" / "verl_tainer_v1_with_vllm_engine.json").is_file()
-    assert (staged / "verl" / "verl_tainer_v1_with_sglang_engine.json").is_file()
+    # The static dashboards keep their own files and the Jsonnet dashboards are
+    # materialized beside them in the same Grafana folder.
+    for name in (
+        "verl_tainer_v1_with_vllm_engine",
+        "verl_tainer_v1_with_sglang_engine",
+    ):
+        assert (staged / "verl" / f"{name}.json").is_file()
+        assert (staged / "verl" / f"{name}_jsonnet.json").is_file()
 
 
-def test_prepare_renders_bundled_compositions_equal_to_committed_baseline(
+def test_prepare_keeps_the_static_dashboards_byte_identical(tmp_path) -> None:
+    _renderer()
+
+    staged = runtime_module._prepare_grafana_dashboards(_conf(), tmp_path / "runtime")
+
+    for name in (
+        "verl_tainer_v1_with_vllm_engine",
+        "verl_tainer_v1_with_sglang_engine",
+    ):
+        assert (staged / "verl" / f"{name}.json").read_bytes() == (
+            _static_dashboard(name).read_bytes()
+        ), f"{name}.json is not the bundled file copied as-is"
+
+
+def test_prepare_renders_bundled_compositions_equal_to_the_static_dashboards(
     tmp_path,
 ) -> None:
     _renderer()
@@ -128,13 +163,26 @@ def test_prepare_renders_bundled_compositions_equal_to_committed_baseline(
         "verl_tainer_v1_with_vllm_engine",
         "verl_tainer_v1_with_sglang_engine",
     ):
-        generated = json.loads(
-            (staged / "verl" / f"{name}.json").read_text(encoding="utf-8")
+        static = _read_json(_static_dashboard(name))
+        rendered = _read_json(staged / "verl" / f"{name}_jsonnet.json")
+        assert _without_identity(rendered) == _without_identity(static), (
+            f"{name}_jsonnet drifted from the static dashboard"
         )
-        committed = json.loads(
-            (JSONNET_OUTPUT_DIR / f"{name}.json").read_text(encoding="utf-8")
-        )
-        assert generated == committed, f"{name} drifted from the committed baseline"
+
+
+def test_prepare_gives_the_jsonnet_dashboards_their_own_identity(tmp_path) -> None:
+    _renderer()
+
+    staged = runtime_module._prepare_grafana_dashboards(_conf(), tmp_path / "runtime")
+
+    for name in (
+        "verl_tainer_v1_with_vllm_engine",
+        "verl_tainer_v1_with_sglang_engine",
+    ):
+        static = _read_json(_static_dashboard(name))
+        rendered = _read_json(staged / "verl" / f"{name}_jsonnet.json")
+        assert rendered["metadata"]["name"] != static["metadata"]["name"]
+        assert rendered["spec"]["title"] == f"{static['spec']['title']}_jsonnet"
 
 
 def test_prepare_keeps_every_other_bundled_dashboard(tmp_path) -> None:
@@ -164,7 +212,14 @@ def test_prepare_renders_explicit_dashboard_config(tmp_path) -> None:
         ).read_text(encoding="utf-8")
     )
     assert written["spec"]["title"] == "custom_board"
-    assert written["metadata"]["name"] == "custom-board"
+    assert written["metadata"]["name"] == "custom_board"
+    # The bundled static dashboards are staged as well; the custom composition
+    # replaces the built-in Jsonnet set, not the other bundled dashboards.
+    assert (staged / "verl" / "verl_tainer_v1_with_vllm_engine.json").is_file()
+    assert not (
+        staged / "verl" / "verl_tainer_v1_with_vllm_engine_jsonnet.json"
+    ).exists()
+    assert (staged / "quick_start_demo" / "quick_start_demo.json").is_file()
 
 
 def test_prepare_rejects_missing_dashboard_config(tmp_path) -> None:
@@ -190,6 +245,27 @@ def test_prepare_rejects_invalid_dashboard_config(tmp_path) -> None:
 
     assert str(config) in str(error.value)
     assert "generation failed" in str(error.value)
+
+
+def test_prepare_rejects_a_custom_config_that_hits_a_static_dashboard(
+    tmp_path,
+) -> None:
+    _renderer()
+
+    static = _static_dashboard("verl_tainer_v1_with_vllm_engine")
+    before = static.read_bytes()
+    config = _write_custom_config(tmp_path, name="verl_tainer_v1_with_vllm_engine")
+    runtime_dir = tmp_path / "runtime"
+
+    with pytest.raises(RuntimeError, match="refusing to overwrite"):
+        runtime_module._prepare_grafana_dashboards(
+            _conf(dashboard_config=str(config)), runtime_dir
+        )
+
+    # Nothing was overwritten: neither the packaged source nor the staged copy.
+    staged = runtime_dir / "dashboards" / "verl" / static.name
+    assert static.read_bytes() == before
+    assert staged.read_bytes() == before
 
 
 def test_prepare_writes_only_into_the_runtime_directory(tmp_path) -> None:
@@ -324,16 +400,21 @@ def test_prepare_generated_and_extra_dashboards_coexist(tmp_path) -> None:
     assert (staged / "verl" / "verl_tainer_v1_with_vllm_engine.json").is_file()
 
 
+@pytest.mark.parametrize(
+    "name",
+    [
+        "verl_tainer_v1_with_vllm_engine",
+        "verl_tainer_v1_with_vllm_engine_jsonnet",
+    ],
+)
 def test_prepare_keeps_collision_detection_against_generated_dashboards(
-    tmp_path,
+    tmp_path, name: str
 ) -> None:
     _renderer()
 
     extra = tmp_path / "extra"
     (extra / "verl").mkdir(parents=True)
-    (extra / "verl" / "verl_tainer_v1_with_vllm_engine.json").write_text(
-        "{}", encoding="utf-8"
-    )
+    (extra / "verl" / f"{name}.json").write_text("{}", encoding="utf-8")
 
     with pytest.raises(RuntimeError, match="already exists in runtime dashboards"):
         runtime_module._prepare_grafana_dashboards(

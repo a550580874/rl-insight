@@ -64,18 +64,20 @@ local verlBase = [trainer, controller, storage, trajectory];
 
 {
   compositions: {
-    // Historical output filename (`tainer`) is kept on purpose.
-    verl_tainer_v1_with_vllm_engine: {
+    // The historical `tainer` spelling and the `_jsonnet` suffix are kept on
+    // purpose: this dashboard is materialized next to the committed static
+    // `verl_tainer_v1_with_vllm_engine.json`, which keeps its own identity.
+    verl_tainer_v1_with_vllm_engine_jsonnet: {
       modules: verlBase + [vllm, npu],
       dashboard: {
         metadata: {
-          name: 'a4cabbce-92af-4a84-9399-4deba24ae6d1',
+          name: '4e42cd18-bffc-491e-8ea6-cd49b6bfd74b',
           generation: 45,
           creationTimestamp: '2026-07-08T14:34:31Z',
           labels: {},
           annotations: {},
         },
-        title: 'verl_trainer_v1_with_vllm_engine',
+        title: 'verl_trainer_v1_with_vllm_engine_jsonnet',
         tags: [
           'RL-Insight',
           'verl',
@@ -104,18 +106,19 @@ local verlBase = [trainer, controller, storage, trajectory];
         ],
       },
     },
-    // Historical output filename (`tainer`) is kept on purpose.
-    verl_tainer_v1_with_sglang_engine: {
+    // Same split for SGLang: the Jsonnet dashboard is an extra dashboard
+    // beside the committed static one, with its own filename and identity.
+    verl_tainer_v1_with_sglang_engine_jsonnet: {
       modules: verlBase + [sglang],
       dashboard: {
         metadata: {
-          name: 'd436bdfd-f96e-4c62-b0b1-8e8315c1757a',
+          name: '3891c6d0-6872-4d81-953c-fed38cce5383',
           generation: 1,
           creationTimestamp: '2026-07-08T14:34:31Z',
           labels: {},
           annotations: {},
         },
-        title: 'verl_trainer_v1_with_sglang_engine',
+        title: 'verl_trainer_v1_with_sglang_engine_jsonnet',
         tags: [
           'RL-Insight',
           'verl',
