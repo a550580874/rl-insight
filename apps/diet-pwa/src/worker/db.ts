@@ -37,7 +37,8 @@ export interface Database {
   batch(statements: PreparedStatement[]): Promise<unknown[]>;
 }
 
-interface FoodRow {
+/** One row of the `foods` table, as D1 returns it. */
+export interface FoodRow {
   id: number;
   name: string;
   category: string;
@@ -50,8 +51,14 @@ interface FoodRow {
   min_grams: number;
   max_grams: number;
   step_grams: number;
+  serving_enabled: number;
   unit_label: string | null;
   unit_grams: number | null;
+  kcal_per_serving: number | null;
+  protein_per_serving: number | null;
+  fat_per_serving: number | null;
+  carbs_per_serving: number | null;
+  serving_step: number;
   created_at: string;
   updated_at: string;
 }
@@ -82,15 +89,18 @@ interface DailyRecordRow {
   actual_fat: number;
 }
 
-interface MealItemRow {
+/** One row of the `meal_items` table, as D1 returns it. */
+export interface MealItemRow {
   module: string;
   food_id: number;
   grams: number;
+  quantity_type: string;
+  servings: number;
   locked: number;
   sort_order: number;
 }
 
-function mapFood(row: FoodRow): Food {
+export function mapFoodRow(row: FoodRow): Food {
   return {
     id: row.id,
     name: row.name,
@@ -104,8 +114,14 @@ function mapFood(row: FoodRow): Food {
     minGrams: row.min_grams,
     maxGrams: row.max_grams,
     stepGrams: row.step_grams,
+    servingEnabled: row.serving_enabled === 1,
     unitLabel: row.unit_label,
     unitGrams: row.unit_grams,
+    kcalPerServing: row.kcal_per_serving,
+    proteinPerServing: row.protein_per_serving,
+    fatPerServing: row.fat_per_serving,
+    carbsPerServing: row.carbs_per_serving,
+    servingStep: row.serving_step,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   };
@@ -138,18 +154,49 @@ function emptyPlan(): MealPlan {
 // ---------------------------------------------------------------------------
 
 const FOOD_COLUMNS = `id, name, category, role, kcal_per_100g, protein_per_100g, fat_per_100g,
-  carbs_per_100g, enabled, min_grams, max_grams, step_grams, unit_label, unit_grams, created_at, updated_at`;
+  carbs_per_100g, enabled, min_grams, max_grams, step_grams, serving_enabled, unit_label, unit_grams,
+  kcal_per_serving, protein_per_serving, fat_per_serving, carbs_per_serving, serving_step,
+  created_at, updated_at`;
+
+const FOOD_WRITE_COLUMNS = `name, category, role, kcal_per_100g, protein_per_100g, fat_per_100g, carbs_per_100g,
+  enabled, min_grams, max_grams, step_grams, serving_enabled, unit_label, unit_grams,
+  kcal_per_serving, protein_per_serving, fat_per_serving, carbs_per_serving, serving_step`;
+
+/** Bind order must match FOOD_WRITE_COLUMNS. */
+function foodWriteValues(input: FoodInput): unknown[] {
+  return [
+    input.name,
+    input.category,
+    input.role,
+    input.kcalPer100g,
+    input.proteinPer100g,
+    input.fatPer100g,
+    input.carbsPer100g,
+    input.enabled ? 1 : 0,
+    input.minGrams,
+    input.maxGrams,
+    input.stepGrams,
+    input.servingEnabled ? 1 : 0,
+    input.unitLabel,
+    input.unitGrams,
+    input.kcalPerServing,
+    input.proteinPerServing,
+    input.fatPerServing,
+    input.carbsPerServing,
+    input.servingStep,
+  ];
+}
 
 export async function listFoods(db: Database): Promise<Food[]> {
   const { results } = await db
     .prepare(`SELECT ${FOOD_COLUMNS} FROM foods ORDER BY sort_order ASC, id ASC`)
     .all<FoodRow>();
-  return results.map(mapFood);
+  return results.map(mapFoodRow);
 }
 
 export async function getFood(db: Database, id: number): Promise<Food | null> {
   const row = await db.prepare(`SELECT ${FOOD_COLUMNS} FROM foods WHERE id = ?`).bind(id).first<FoodRow>();
-  return row ? mapFood(row) : null;
+  return row ? mapFoodRow(row) : null;
 }
 
 export async function getFoodsByIds(db: Database, ids: readonly number[]): Promise<Food[]> {
@@ -159,65 +206,37 @@ export async function getFoodsByIds(db: Database, ids: readonly number[]): Promi
     .prepare(`SELECT ${FOOD_COLUMNS} FROM foods WHERE id IN (${placeholders})`)
     .bind(...ids)
     .all<FoodRow>();
-  return results.map(mapFood);
+  return results.map(mapFoodRow);
 }
 
 export async function createFood(db: Database, input: FoodInput): Promise<Food> {
+  const placeholders = FOOD_WRITE_COLUMNS.split(',').map(() => '?').join(', ');
   const row = await db
     .prepare(
-      `INSERT INTO foods (name, category, role, kcal_per_100g, protein_per_100g, fat_per_100g, carbs_per_100g,
-        enabled, min_grams, max_grams, step_grams, unit_label, unit_grams, is_seed, sort_order)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, 500)
+      `INSERT INTO foods (${FOOD_WRITE_COLUMNS}, is_seed, sort_order)
+       VALUES (${placeholders}, 0, 500)
        RETURNING ${FOOD_COLUMNS}`,
     )
-    .bind(
-      input.name,
-      input.category,
-      input.role,
-      input.kcalPer100g,
-      input.proteinPer100g,
-      input.fatPer100g,
-      input.carbsPer100g,
-      input.enabled ? 1 : 0,
-      input.minGrams,
-      input.maxGrams,
-      input.stepGrams,
-      input.unitLabel,
-      input.unitGrams,
-    )
+    .bind(...foodWriteValues(input))
     .first<FoodRow>();
 
   if (!row) throw new Error('Failed to create food');
-  return mapFood(row);
+  return mapFoodRow(row);
 }
 
 export async function updateFood(db: Database, id: number, input: FoodInput): Promise<Food | null> {
+  const assignments = FOOD_WRITE_COLUMNS.split(',')
+    .map((column) => `${column.trim()} = ?`)
+    .join(', ');
   const row = await db
     .prepare(
-      `UPDATE foods SET name = ?, category = ?, role = ?, kcal_per_100g = ?, protein_per_100g = ?,
-        fat_per_100g = ?, carbs_per_100g = ?, enabled = ?, min_grams = ?, max_grams = ?, step_grams = ?,
-        unit_label = ?, unit_grams = ?, updated_at = datetime('now')
+      `UPDATE foods SET ${assignments}, updated_at = datetime('now')
        WHERE id = ?
        RETURNING ${FOOD_COLUMNS}`,
     )
-    .bind(
-      input.name,
-      input.category,
-      input.role,
-      input.kcalPer100g,
-      input.proteinPer100g,
-      input.fatPer100g,
-      input.carbsPer100g,
-      input.enabled ? 1 : 0,
-      input.minGrams,
-      input.maxGrams,
-      input.stepGrams,
-      input.unitLabel,
-      input.unitGrams,
-      id,
-    )
+    .bind(...foodWriteValues(input), id)
     .first<FoodRow>();
-  return row ? mapFood(row) : null;
+  return row ? mapFoodRow(row) : null;
 }
 
 export async function deleteFood(db: Database, id: number): Promise<boolean> {
@@ -285,11 +304,25 @@ export async function saveSettings(db: Database, input: SettingsInput): Promise<
 // Daily records
 // ---------------------------------------------------------------------------
 
+/**
+ * Turn a `meal_items` row back into a plan item. Rows written before 按份
+ * existed get 'grams' from the migration default, so old days keep loading.
+ */
+export function mapMealItemRow(row: MealItemRow): MealItem {
+  return {
+    foodId: row.food_id,
+    grams: row.grams,
+    quantityType: row.quantity_type === 'servings' ? 'servings' : 'grams',
+    servings: row.servings,
+    locked: row.locked === 1,
+  };
+}
+
 async function loadPlan(db: Database, recordId: number): Promise<MealPlan> {
   const plan = emptyPlan();
   const { results } = await db
     .prepare(
-      `SELECT module, food_id, grams, locked, sort_order FROM meal_items
+      `SELECT module, food_id, grams, quantity_type, servings, locked, sort_order FROM meal_items
        WHERE record_id = ? ORDER BY module ASC, sort_order ASC, id ASC`,
     )
     .bind(recordId)
@@ -298,8 +331,7 @@ async function loadPlan(db: Database, recordId: number): Promise<MealPlan> {
   for (const row of results) {
     const key = row.module as ModuleKey;
     if (!MODULE_KEYS.includes(key)) continue;
-    const item: MealItem = { foodId: row.food_id, grams: row.grams, locked: row.locked === 1 };
-    plan[key].push(item);
+    plan[key].push(mapMealItemRow(row));
   }
   return plan;
 }
@@ -401,13 +433,23 @@ export async function saveRecord(db: Database, input: SaveRecordInput): Promise<
       statements.push(
         db
           .prepare(
-            `INSERT INTO meal_items (record_id, module, food_id, grams, locked, sort_order)
-             VALUES (?, ?, ?, ?, ?, ?)
+            `INSERT INTO meal_items (record_id, module, food_id, grams, quantity_type, servings, locked, sort_order)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?)
              ON CONFLICT(record_id, module, food_id) DO UPDATE SET
-               grams = excluded.grams, locked = excluded.locked, sort_order = excluded.sort_order,
+               grams = excluded.grams, quantity_type = excluded.quantity_type, servings = excluded.servings,
+               locked = excluded.locked, sort_order = excluded.sort_order,
                updated_at = datetime('now')`,
           )
-          .bind(record.id, key, item.foodId, item.grams, item.locked ? 1 : 0, index),
+          .bind(
+            record.id,
+            key,
+            item.foodId,
+            item.grams,
+            item.quantityType,
+            item.servings,
+            item.locked ? 1 : 0,
+            index,
+          ),
       );
     });
   }

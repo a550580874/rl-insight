@@ -69,24 +69,16 @@ if [ "$(code "$BASE/api/health")" != "200" ]; then
 fi
 
 echo
-echo "== 1. health + auth gate"
+echo "== 1. health"
 check "GET /api/health -> 200" 200 "$(code "$BASE/api/health")"
-check "GET /api/foods before unlock -> 401" 401 "$(code "$BASE/api/foods")"
-check "GET /api/auth/status -> 200" 200 "$(code "$BASE/api/auth/status")"
+# The single-user PIN gate was removed, so the API is open by design.
+check "GET /api/foods -> 200 (no auth gate)" 200 "$(code "$BASE/api/foods")"
 
 echo
-echo "== 2. PIN setup and session cookie"
-check "POST /api/auth/pin -> 200" 200 \
-  "$(code -c "$JAR" -X POST -H 'content-type: application/json' -d '{"pin":"246813"}' "$BASE/api/auth/pin")"
-if grep -q "diet_session" "$JAR"; then
-  echo "  PASS  HttpOnly session cookie issued"
-  pass=$((pass + 1))
-else
-  echo "  FAIL  no session cookie issued"
-  fail=$((fail + 1))
-fi
-check "session cookie reaches a protected route -> 200" 200 "$(code -b "$JAR" "$BASE/api/foods")"
-check "seeded food library -> 28 foods" 28 "$(body -b "$JAR" "$BASE/api/foods" | json "['foods'].__len__()")"
+echo "== 2. seeded food library"
+check "seeded food library -> 28 foods" 28 "$(body "$BASE/api/foods" | json "['foods'].__len__()")"
+check "foods expose the serving fields" "False" \
+  "$(body "$BASE/api/foods" | python3 -c "import sys,json;print(any('kcalPerServing' not in f for f in json.load(sys.stdin)['foods']))")"
 
 echo
 echo "== 3. settings / weight linkage"
@@ -154,7 +146,16 @@ check "POST /api/records/copy -> 200" 200 \
   "$(code -b "$JAR" -X POST -H 'content-type: application/json' -d '{"from":"2026-09-28","to":"2026-09-29"}' "$BASE/api/records/copy")"
 check "copied day keeps the target carbs" 210 "$(body -b "$JAR" "$BASE/api/records/2026-09-29" | json "['record']['targetCarbs']")"
 check "GET /api/records?days=7 -> 200" 200 "$(code -b "$JAR" "$BASE/api/records?days=7")"
-check "two records in history" 2 "$(body -b "$JAR" "$BASE/api/records?days=7" | json "['records'].__len__()")"
+# Both days the script wrote must appear. The local D1 keeps records between
+# runs, so this asserts containment instead of an exact count.
+cat > "$WORK/dates_in_history.py" <<'PYEOF'
+import json, sys
+
+dates = [record["date"] for record in json.load(sys.stdin)["records"]]
+print("true" if "2026-09-28" in dates and "2026-10-05" in dates else "false")
+PYEOF
+check "both smoke columns are in history" "true" \
+  "$(body -b "$JAR" "$BASE/api/records?days=7" | python3 "$WORK/dates_in_history.py")"
 
 echo
 echo "== 6b. new day without an explicit target uses the stored 默认热量目标"
@@ -175,13 +176,62 @@ check "explicit targetCalories still wins" 2500 \
     "$BASE/api/records/2026-10-05" | json "['record']['targetCalories']")"
 
 echo
-echo "== 7. PIN rejection + logout"
-check "wrong PIN -> 401" 401 \
-  "$(code -X POST -H 'content-type: application/json' -d '{"pin":"999999"}' "$BASE/api/auth/pin")"
-check "POST /api/auth/logout -> 200" 200 "$(code -b "$JAR" -c "$JAR" -X POST "$BASE/api/auth/logout")"
-check "session invalidated -> 401" 401 "$(code -b "$JAR" "$BASE/api/foods")"
+echo "== 7. 按份 (per-serving) food + meal item"
+# The payloads go through files: the JSON is full of quotes and braces, and
+# inline `-d "{\"...\"}"` nesting is easy to get subtly wrong.
+EGG_ID="$(body "$BASE/api/foods" | python3 -c "import sys,json;print([f['id'] for f in json.load(sys.stdin)['foods'] if f['name']=='鸡蛋'][0])")"
+RICE_ID="$(body "$BASE/api/foods" | python3 -c "import sys,json;print([f['id'] for f in json.load(sys.stdin)['foods'] if f['name']=='熟米饭'][0])")"
+DAY=2026-10-06
 
-echo
+cat > "$WORK/egg.json" <<JSON
+{"name":"鸡蛋","category":"蛋类","role":"mixed","kcalPer100g":143,"proteinPer100g":12.6,"fatPer100g":9.5,"carbsPer100g":0.7,"enabled":true,"minGrams":50,"maxGrams":300,"stepGrams":50,"servingEnabled":true,"unitLabel":"个","unitGrams":50,"kcalPerServing":72,"proteinPerServing":6.3,"fatPerServing":4.8,"carbsPerServing":0.4,"servingStep":1}
+JSON
+check "PUT /api/foods/:id 启用按份 -> 200" 200 \
+  "$(code -X PUT -H 'content-type: application/json' --data-binary @"$WORK/egg.json" "$BASE/api/foods/$EGG_ID")"
+check "每份热量 stored as 72" 72 \
+  "$(body "$BASE/api/foods" | python3 -c "import sys,json;print([f['kcalPerServing'] for f in json.load(sys.stdin)['foods'] if f['name']=='鸡蛋'][0])")"
+
+# 启用按份 without a unit name must be rejected, and must not half-write.
+python3 - "$WORK/egg.json" "$WORK/egg-no-unit.json" <<'PYEOF'
+import json, sys
+food = json.load(open(sys.argv[1]))
+food['unitLabel'] = None
+json.dump(food, open(sys.argv[2], 'w'), ensure_ascii=False)
+PYEOF
+check "启用按份 without 份单位 -> 400" 400 \
+  "$(code -X PUT -H 'content-type: application/json' --data-binary @"$WORK/egg-no-unit.json" "$BASE/api/foods/$EGG_ID")"
+check "…and the rejected write left 份单位 alone" "个" \
+  "$(body "$BASE/api/foods" | python3 -c "import sys,json;print([f['unitLabel'] for f in json.load(sys.stdin)['foods'] if f['name']=='鸡蛋'][0])")"
+
+cat > "$WORK/egg-record.json" <<JSON
+{"weightKg":70,"trainingDay":false,"trainingAfterMeal":"lunch","targetCalories":1900,"calorieTargetManual":false,"plan":{"breakfast":[{"foodId":$EGG_ID,"grams":100,"quantityType":"servings","servings":2,"locked":true}],"lunch":[],"dinner":[],"postWorkout":[]}}
+JSON
+check "PUT /api/records/:date with 2 个鸡蛋 -> 200" 200 \
+  "$(code -X PUT -H 'content-type: application/json' --data-binary @"$WORK/egg-record.json" "$BASE/api/records/$DAY")"
+check "the item is stored as servings (not grams)" "servings" \
+  "$(body "$BASE/api/records/$DAY" | json "['record']['plan']['breakfast'][0]['quantityType']")"
+check "the serving count is kept as 2" 2 \
+  "$(body "$BASE/api/records/$DAY" | json "['record']['plan']['breakfast'][0]['servings']")"
+check "the effective weight is stored as 100 g" 100 \
+  "$(body "$BASE/api/records/$DAY" | json "['record']['plan']['breakfast'][0]['grams']")"
+check "2 个鸡蛋 = 144 kcal" 144 \
+  "$(body "$BASE/api/records/$DAY" | json "['record']['actualCalories']")"
+check "a second read still shows 2 个 (refresh)" "servings" \
+  "$(body "$BASE/api/records/$DAY" | json "['record']['plan']['breakfast'][0]['quantityType']")"
+
+cat > "$WORK/rice-servings.json" <<JSON
+{"weightKg":70,"trainingDay":false,"trainingAfterMeal":"lunch","targetCalories":1900,"plan":{"breakfast":[{"foodId":$RICE_ID,"quantityType":"servings","servings":1}],"lunch":[],"dinner":[],"postWorkout":[]}}
+JSON
+check "按份 item on a food without serving data -> 400" 400 \
+  "$(code -X PUT -H 'content-type: application/json' --data-binary @"$WORK/rice-servings.json" "$BASE/api/records/$DAY")"
+check "…and the rejected payload changed nothing" "7:servings" \
+  "$(body "$BASE/api/records/$DAY" | python3 -c "import sys,json;i=json.load(sys.stdin)['record']['plan']['breakfast'];print(f\"{i[0]['foodId']}:{i[0]['quantityType']}\" if len(i)==1 else 'changed')")"
+
+cat > "$WORK/empty-record.json" <<JSON
+{"weightKg":70,"trainingDay":false,"trainingAfterMeal":"lunch","targetCalories":1900,"plan":{"breakfast":[],"lunch":[],"dinner":[],"postWorkout":[]}}
+JSON
+body -X PUT -H 'content-type: application/json' --data-binary @"$WORK/empty-record.json" "$BASE/api/records/$DAY" >/dev/null
+
 echo "== 8. SPA shell + PWA assets"
 check "GET / -> 200" 200 "$(code "$BASE/")"
 check "GET /manifest.webmanifest -> 200" 200 "$(code "$BASE/manifest.webmanifest")"

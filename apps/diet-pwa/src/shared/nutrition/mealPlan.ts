@@ -20,6 +20,7 @@ import type {
 import { MODULE_KEYS } from '../types';
 import { KCAL_PER_GRAM, NUTRITION_CONFIG, macroCalories, type NutritionConfig } from './config';
 import { optimizeMeal, type OptimizerFood } from './optimizer';
+import { calculateFoodNutrition, effectiveGrams, hasServingNutrition, normalizeQuantity } from './serving';
 import { computeDayTargets, round1 } from './targets';
 
 export function toOptimizerFood(food: Food): OptimizerFood {
@@ -34,6 +35,12 @@ export function toOptimizerFood(food: Food): OptimizerFood {
     minGrams: food.minGrams,
     maxGrams: food.maxGrams,
     stepGrams: food.stepGrams,
+    servingEnabled: food.servingEnabled,
+    unitGrams: food.unitGrams,
+    kcalPerServing: food.kcalPerServing,
+    proteinPerServing: food.proteinPerServing,
+    fatPerServing: food.fatPerServing,
+    carbsPerServing: food.carbsPerServing,
   };
 }
 
@@ -41,13 +48,23 @@ export function emptyPlan(): MealPlan {
   return { breakfast: [], lunch: [], dinner: [], postWorkout: [] };
 }
 
-/** Normalise whatever came from the API into a full four-module plan. */
+/**
+ * Normalise whatever came from the API into a full four-module plan.
+ *
+ * Every item gets an explicit quantity mode; a payload that only carries grams
+ * (any client written before 按份 existed) is treated as grams.
+ */
 export function normalizePlan(plan: Partial<MealPlan> | null | undefined): MealPlan {
   const result = emptyPlan();
   if (!plan) return result;
   for (const key of MODULE_KEYS) {
     const items = plan[key];
-    result[key] = Array.isArray(items) ? items.map((item) => ({ ...item })) : [];
+    result[key] = Array.isArray(items)
+      ? items.map((item) => {
+          const quantity = normalizeQuantity(item);
+          return { ...item, ...quantity };
+        })
+      : [];
   }
   return result;
 }
@@ -60,11 +77,12 @@ function macrosOfItems(items: readonly MealItem[], foodById: Map<number, Food>):
   for (const item of items) {
     const food = foodById.get(item.foodId);
     if (!food) continue;
-    const factor = item.grams / 100;
-    carbs += food.carbsPer100g * factor;
-    protein += food.proteinPer100g * factor;
-    fat += food.fatPer100g * factor;
-    calories += food.kcalPer100g * factor;
+    // One formula for both modes; the UI and the Worker share it.
+    const macros = calculateFoodNutrition(food, item);
+    carbs += macros.carbs;
+    protein += macros.protein;
+    fat += macros.fat;
+    calories += macros.calories;
   }
   return {
     carbs: round1(carbs),
@@ -89,31 +107,39 @@ function addTotals(a: MacroTotals, b: MacroTotals): MacroTotals {
 
 function computedItems(
   items: readonly MealItem[],
-  optimizedGrams: Map<number, number>,
+  optimizedItems: Map<number, MealItem>,
   foodById: Map<number, Food>,
 ): ComputedMealItem[] {
   const result: ComputedMealItem[] = [];
   for (const item of items) {
     const food = foodById.get(item.foodId);
     if (!food) continue;
-    const grams = optimizedGrams.get(item.foodId) ?? item.grams;
-    const factor = grams / 100;
-    const units = food.unitGrams && food.unitGrams > 0 ? round1(grams / food.unitGrams) : null;
+    const optimized = optimizedItems.get(item.foodId);
+    const quantity = normalizeQuantity(optimized ?? item);
+    // 按份 keeps the user's serving count; grams mode keeps the optimized weight.
+    const grams =
+      quantity.quantityType === 'servings' ? effectiveGrams(food, quantity) : round1(optimized?.grams ?? item.grams);
+    const servingEnabled = hasServingNutrition(food);
+    const units =
+      quantity.quantityType === 'servings'
+        ? quantity.servings
+        : food.unitGrams && food.unitGrams > 0
+          ? round1(grams / food.unitGrams)
+          : null;
     result.push({
       foodId: food.id,
       name: food.name,
       role: food.role,
-      grams: round1(grams),
-      locked: item.locked,
+      grams,
+      locked: optimized?.locked ?? item.locked,
+      quantityType: quantity.quantityType,
+      servings: quantity.servings,
+      servingEnabled,
+      servingStep: food.servingStep,
       unitLabel: food.unitLabel,
       unitGrams: food.unitGrams,
       units,
-      macros: {
-        carbs: round1(food.carbsPer100g * factor),
-        protein: round1(food.proteinPer100g * factor),
-        fat: round1(food.fatPer100g * factor),
-        calories: round1(food.kcalPer100g * factor),
-      },
+      macros: calculateFoodNutrition(food, quantity),
     });
   }
   return result;
@@ -172,13 +198,13 @@ export function computeDayPlan(params: ComputeDayPlanParams): DayPlanResult {
         modules.postWorkout = { key, target: zeroTotals(), actual: zeroTotals(), error: zeroTotals(), items: [] };
         continue;
       }
-      const grams = new Map(items.map((item) => [item.foodId, item.grams]));
+      const fixed = new Map(items.map((item) => [item.foodId, item]));
       const result: ModuleResult = {
         key,
         target: postWorkoutMacros,
         actual: postWorkoutMacros,
         error: zeroTotals(),
-        items: computedItems(items, grams, foodById),
+        items: computedItems(items, fixed, foodById),
       };
       modules.postWorkout = result;
       totals = addTotals(totals, result.actual);
@@ -188,13 +214,13 @@ export function computeDayPlan(params: ComputeDayPlanParams): DayPlanResult {
     const override = params.mealTargetOverrides?.[key];
     const target: MacroTargets = override ? { ...dayTargets.meals[key], ...override } : dayTargets.meals[key];
     const optimized = optimizeMeal({ foods: optimizerFoods, items, target, config });
-    const grams = new Map(optimized.items.map((item) => [item.foodId, item.grams]));
+    const optimizedItems = new Map(optimized.items.map((item) => [item.foodId, item]));
     const result: ModuleResult = {
       key,
       target,
       actual: optimized.macros,
       error: optimized.error,
-      items: computedItems(items, grams, foodById),
+      items: computedItems(items, optimizedItems, foodById),
     };
     modules[key] = result;
     totals = addTotals(totals, result.actual);

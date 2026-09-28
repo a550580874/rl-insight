@@ -6,31 +6,21 @@
 
 import { describe, expect, it } from 'vitest';
 import { optimizeMeal, type OptimizerFood } from '../src/shared/nutrition/optimizer';
+import { toOptimizerFood } from '../src/shared/nutrition/mealPlan';
 import type { MealItem } from '../src/shared/types';
-import { BROCCOLI, CHICKEN, MILK, NUTS, OLIVE_OIL, RICE, foods as allFoods, foodById } from './fixtures';
+import { BROCCOLI, CHICKEN, MILK, NUTS, OLIVE_OIL, RICE, foods as allFoods, foodById, mealItem } from './fixtures';
 
-const optimizerFoods: OptimizerFood[] = allFoods.map((food) => ({
-  id: food.id,
-  name: food.name,
-  role: food.role,
-  kcalPer100g: food.kcalPer100g,
-  proteinPer100g: food.proteinPer100g,
-  fatPer100g: food.fatPer100g,
-  carbsPer100g: food.carbsPer100g,
-  minGrams: food.minGrams,
-  maxGrams: food.maxGrams,
-  stepGrams: food.stepGrams,
-}));
+const optimizerFoods: OptimizerFood[] = allFoods.map(toOptimizerFood);
 
 /** The lunch target used as the worked example in the contract (§14). */
 const LUNCH_TARGET = { carbs: 85, protein: 32, fat: 12 };
 
 function lunchItems(overrides: Partial<Record<number, Partial<MealItem>>> = {}): MealItem[] {
   const base: MealItem[] = [
-    { foodId: RICE, grams: 200, locked: false },
-    { foodId: CHICKEN, grams: 100, locked: false },
-    { foodId: BROCCOLI, grams: 150, locked: false },
-    { foodId: OLIVE_OIL, grams: 10, locked: false },
+    mealItem(RICE, 200, false),
+    mealItem(CHICKEN, 100, false),
+    mealItem(BROCCOLI, 150, false),
+    mealItem(OLIVE_OIL, 10, false),
   ];
   return base.map((item) => ({ ...item, ...(overrides[item.foodId] ?? {}) }));
 }
@@ -70,8 +60,8 @@ describe('optimizer baseline', () => {
     // Only rice and broccoli are available; the protein target cannot be met,
     // but rice must stay inside its serving range instead of exploding.
     const result = solve([
-      { foodId: RICE, grams: 200, locked: false },
-      { foodId: BROCCOLI, grams: 150, locked: false },
+      mealItem(RICE, 200, false),
+      mealItem(BROCCOLI, 150, false),
     ]);
     assertServingConstraints(result);
     expect(gramsOf(result, RICE)).toBeLessThanOrEqual(500);
@@ -80,8 +70,8 @@ describe('optimizer baseline', () => {
 
   it('does not use a protein food to fix a fat gap (§16)', () => {
     const result = solve([
-      { foodId: CHICKEN, grams: 100, locked: false },
-      { foodId: OLIVE_OIL, grams: 10, locked: false },
+      mealItem(CHICKEN, 100, false),
+      mealItem(OLIVE_OIL, 10, false),
     ]);
     assertServingConstraints(result);
     // Chicken stays near the protein requirement instead of ballooning for fat.
@@ -180,10 +170,10 @@ describe('Case 8: rebalancing after a manual edit', () => {
 describe('multi-food role mixing', () => {
   it('splits carbohydrate between two carb foods instead of loading one', () => {
     const withMilk: MealItem[] = [
-      { foodId: RICE, grams: 200, locked: false },
-      { foodId: CHICKEN, grams: 100, locked: false },
-      { foodId: MILK, grams: 200, locked: false },
-      { foodId: NUTS, grams: 10, locked: false },
+      mealItem(RICE, 200, false),
+      mealItem(CHICKEN, 100, false),
+      mealItem(MILK, 200, false),
+      mealItem(NUTS, 10, false),
     ];
     const result = solve(withMilk, { carbs: 60, protein: 40, fat: 15 });
     assertServingConstraints(result);

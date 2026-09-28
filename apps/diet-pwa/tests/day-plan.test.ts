@@ -6,26 +6,26 @@
 import { describe, expect, it } from 'vitest';
 import { computeDayPlan, normalizePlan, optimizePreWorkoutCarbs, planMacros } from '../src/shared/nutrition/mealPlan';
 import type { MealPlan } from '../src/shared/types';
-import { BANANA, BROCCOLI, CHICKEN, EGG, MILK, OATS, OLIVE_OIL, PROTEIN_POWDER, RICE, SWEET_POTATO, foods } from './fixtures';
+import { BANANA, BROCCOLI, CHICKEN, EGG, MILK, OATS, OLIVE_OIL, PROTEIN_POWDER, RICE, SWEET_POTATO, foods, mealItem } from './fixtures';
 
 function basePlan(): MealPlan {
   return {
     breakfast: [
-      { foodId: OATS, grams: 80, locked: false },
-      { foodId: EGG, grams: 100, locked: false },
-      { foodId: MILK, grams: 250, locked: false },
+      mealItem(OATS, 80, false),
+      mealItem(EGG, 100, false),
+      mealItem(MILK, 250, false),
     ],
     lunch: [
-      { foodId: RICE, grams: 280, locked: false },
-      { foodId: CHICKEN, grams: 120, locked: false },
-      { foodId: BROCCOLI, grams: 150, locked: false },
-      { foodId: OLIVE_OIL, grams: 10, locked: false },
+      mealItem(RICE, 280, false),
+      mealItem(CHICKEN, 120, false),
+      mealItem(BROCCOLI, 150, false),
+      mealItem(OLIVE_OIL, 10, false),
     ],
     dinner: [
-      { foodId: SWEET_POTATO, grams: 100, locked: false },
-      { foodId: CHICKEN, grams: 120, locked: false },
-      { foodId: BROCCOLI, grams: 150, locked: false },
-      { foodId: OLIVE_OIL, grams: 10, locked: false },
+      mealItem(SWEET_POTATO, 100, false),
+      mealItem(CHICKEN, 120, false),
+      mealItem(BROCCOLI, 150, false),
+      mealItem(OLIVE_OIL, 10, false),
     ],
     postWorkout: [],
   };
@@ -61,7 +61,7 @@ describe('Case 5: post-workout banana counts towards the daily carbohydrate tota
   it('subtracts the banana carbohydrate from the meal budgets', () => {
     const without = day(basePlan());
     const planWithBanana = basePlan();
-    planWithBanana.postWorkout = [{ foodId: BANANA, grams: 120, locked: false }];
+    planWithBanana.postWorkout = [mealItem(BANANA, 120, false)];
     const withBanana = day(planWithBanana);
 
     // 120 g banana x 22.8 g carbs / 100 g = 27.36 -> 27.4 g
@@ -71,7 +71,7 @@ describe('Case 5: post-workout banana counts towards the daily carbohydrate tota
 
   it('still reaches the full daily carbohydrate target', () => {
     const planWithBanana = basePlan();
-    planWithBanana.postWorkout = [{ foodId: BANANA, grams: 120, locked: false }];
+    planWithBanana.postWorkout = [mealItem(BANANA, 120, false)];
     const result = day(planWithBanana);
 
     expect(result.dailyTarget).toEqual({ carbs: 210, protein: 112, fat: 42 });
@@ -83,7 +83,7 @@ describe('Case 5: post-workout banana counts towards the daily carbohydrate tota
 
   it('follows the banana weight the user actually edits', () => {
     const heavy = basePlan();
-    heavy.postWorkout = [{ foodId: BANANA, grams: 200, locked: false }];
+    heavy.postWorkout = [mealItem(BANANA, 200, false)];
     const result = day(heavy);
     expect(result.modules.postWorkout.actual.carbs).toBeCloseTo(45.6, 1);
     expect(mealTargetCarbs(result)).toBeLessThan(mealTargetCarbs(day(basePlan())));
@@ -94,7 +94,7 @@ describe('Case 6: post-workout protein powder counts towards the daily protein t
   it('subtracts the powder protein from the meal budgets', () => {
     const without = day(basePlan());
     const planWithPowder = basePlan();
-    planWithPowder.postWorkout = [{ foodId: PROTEIN_POWDER, grams: 30, locked: false }];
+    planWithPowder.postWorkout = [mealItem(PROTEIN_POWDER, 30, false)];
     const withPowder = day(planWithPowder);
 
     // 30 g of the sample powder at 80 g protein / 100 g = 24 g
@@ -105,8 +105,8 @@ describe('Case 6: post-workout protein powder counts towards the daily protein t
   it('counts banana and powder together for both macros', () => {
     const full = basePlan();
     full.postWorkout = [
-      { foodId: BANANA, grams: 120, locked: false },
-      { foodId: PROTEIN_POWDER, grams: 30, locked: false },
+      mealItem(BANANA, 120, false),
+      mealItem(PROTEIN_POWDER, 30, false),
     ];
     const result = day(full);
 
@@ -120,8 +120,8 @@ describe('Case 6: post-workout protein powder counts towards the daily protein t
   it('hides the post-workout module on rest days', () => {
     const plan = basePlan();
     plan.postWorkout = [
-      { foodId: BANANA, grams: 120, locked: false },
-      { foodId: PROTEIN_POWDER, grams: 30, locked: false },
+      mealItem(BANANA, 120, false),
+      mealItem(PROTEIN_POWDER, 30, false),
     ];
     const result = day(plan, false);
 
@@ -136,8 +136,8 @@ describe('day plan assembly', () => {
   it('reports the daily totals as the sum of the four modules', () => {
     const plan = basePlan();
     plan.postWorkout = [
-      { foodId: BANANA, grams: 120, locked: false },
-      { foodId: PROTEIN_POWDER, grams: 30, locked: false },
+      mealItem(BANANA, 120, false),
+      mealItem(PROTEIN_POWDER, 30, false),
     ];
     const result = day(plan);
     const sumC = [result.modules.breakfast, result.modules.lunch, result.modules.dinner, result.modules.postWorkout]
@@ -159,7 +159,7 @@ describe('day plan assembly', () => {
 
   it('displays 鸡蛋 in units while keeping grams underneath', () => {
     const plan = basePlan();
-    plan.breakfast = [{ foodId: EGG, grams: 100, locked: true }];
+    plan.breakfast = [mealItem(EGG, 100, true)];
     plan.lunch = [];
     plan.dinner = [];
     const result = day(plan);
@@ -172,7 +172,7 @@ describe('day plan assembly', () => {
   });
 
   it('normalises a partial plan coming from the API', () => {
-    const plan = normalizePlan({ breakfast: [{ foodId: RICE, grams: 100, locked: false }] });
+    const plan = normalizePlan({ breakfast: [mealItem(RICE, 100, false)] });
     expect(plan.lunch).toEqual([]);
     expect(plan.postWorkout).toEqual([]);
     expect(plan.breakfast).toHaveLength(1);
@@ -180,7 +180,7 @@ describe('day plan assembly', () => {
 
   it('computes plan macros without optimising', () => {
     const plan = basePlan();
-    plan.postWorkout = [{ foodId: BANANA, grams: 100, locked: false }];
+    plan.postWorkout = [mealItem(BANANA, 100, false)];
 
     const expectedCarbs = [plan.breakfast, plan.lunch, plan.dinner, plan.postWorkout]
       .flat()
