@@ -64,6 +64,11 @@ rl_insight = [
   "config/services/grafana/provisioning/dashboards/*.yml",
   "config/services/grafana/dashboards/*.json",
   "config/services/grafana/dashboards/*/*.json",
+  # Production Jsonnet sources the runtime renders at startup.
+  "config/services/grafana/jsonnet/*.jsonnet",
+  "config/services/grafana/jsonnet/*.libsonnet",
+  "config/services/grafana/jsonnet/dashboards/*.jsonnet",
+  "config/services/grafana/jsonnet/dashboards/*.libsonnet",
 ]
 recipe = [
   "config/*.yaml",

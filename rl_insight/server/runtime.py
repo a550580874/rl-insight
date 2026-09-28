@@ -28,7 +28,7 @@ import socket
 import subprocess
 import sys
 import time
-from collections.abc import Sequence
+from collections.abc import Collection, Sequence
 from contextlib import ExitStack, contextmanager
 from dataclasses import dataclass
 from pathlib import Path
@@ -39,7 +39,9 @@ import requests
 import yaml
 from omegaconf import DictConfig, OmegaConf
 
+from ..grafana.renderer import JsonnetRenderError, materialize_dashboards
 from ..utils.constants import (
+    MonitorPaths,
     PrometheusScrape,
     prometheus_targets_file_from_config,
 )
@@ -126,7 +128,7 @@ class LocalServiceRuntime:
             )
         if bool(OmegaConf.select(self.conf, "grafana.enable", default=True)):
             grafana_config = _render_grafana_config(self.conf, runtime_dir, data_dir)
-            dashboard_path = _stage_grafana_dashboards(self.conf, runtime_dir)
+            dashboard_path = _prepare_grafana_dashboards(self.conf, runtime_dir)
             _render_grafana_provisioning(self.conf, runtime_dir, dashboard_path)
 
         return RuntimeFiles(
@@ -920,18 +922,109 @@ def _render_grafana_provisioning(
     )
 
 
-def _stage_grafana_dashboards(conf: DictConfig, runtime_dir: Path) -> Path:
-    source = Path(str(OmegaConf.select(conf, "grafana.dashboards_dir"))).resolve()
-    target = (runtime_dir / "dashboards").resolve()
-    target.mkdir(parents=True, exist_ok=True)
-    if source != target and source.exists():
-        shutil.rmtree(target)
-        target.mkdir(parents=True)
-        _copy_dashboard_directory(source, target)
+def _prepare_grafana_dashboards(conf: DictConfig, runtime_dir: Path) -> Path:
+    """Materialize the dashboards Grafana loads into ``<runtime_dir>/dashboards``.
 
+    The runtime directory is rebuilt from scratch on every start, so a removed
+    or renamed source file never leaves a stale copy behind. The base source is
+    then chosen by this precedence (see ``tools/grafana/README.md``):
+
+    1. a non-empty ``grafana.dashboard_config`` renders that Jsonnet config; a
+       missing file or a Jsonnet error stops startup before Grafana runs;
+    2. otherwise a ``grafana.dashboards_dir`` that points somewhere other than
+       the bundled default directory is copied as-is (legacy static workflow);
+    3. otherwise the Jsonnet entrypoint bundled in the installed package is
+       rendered — no CLI, no generated files on disk to keep in sync.
+
+    In cases 1 and 3 the packaged dashboards are staged first and the rendered
+    compositions are materialized over them, so every bundled dashboard is
+    still served and the Jsonnet-owned files are always freshly rendered.
+
+    ``grafana.extra_dashboard_dir`` is merged on top of whichever base source
+    applies, last, and keeps its recursive copy, invalid-path and filename
+    collision behavior.
+    """
+    target = (runtime_dir / "dashboards").resolve()
+    if target.exists():
+        shutil.rmtree(target)
+    target.mkdir(parents=True)
+
+    dashboard_config = OmegaConf.select(conf, "grafana.dashboard_config")
+    configured = str(dashboard_config).strip() if dashboard_config is not None else ""
+
+    if configured:
+        _stage_bundled_dashboards(target)
+        _materialize_dashboards(
+            Path(configured).expanduser(), _jsonnet_output_dir(target)
+        )
+    else:
+        dashboards_dir = (
+            Path(str(OmegaConf.select(conf, "grafana.dashboards_dir")))
+            .expanduser()
+            .resolve()
+        )
+        bundled_dir = MonitorPaths.GRAFANA_DASHBOARDS_DIR.resolve()
+        if dashboards_dir == bundled_dir:
+            _stage_bundled_dashboards(target)
+            _materialize_dashboards(
+                MonitorPaths.GRAFANA_JSONNET_ENTRYPOINT, _jsonnet_output_dir(target)
+            )
+        else:
+            if not dashboards_dir.exists():
+                raise RuntimeError(
+                    f"Grafana dashboards directory {str(dashboards_dir)!r} "
+                    "does not exist."
+                )
+            if not dashboards_dir.is_dir():
+                raise RuntimeError(
+                    f"Grafana dashboards path {str(dashboards_dir)!r} "
+                    "is not a directory."
+                )
+            _copy_dashboard_directory(dashboards_dir, target)
+
+    _merge_extra_dashboards(conf, target)
+    return target
+
+
+def _jsonnet_output_dir(target: Path) -> Path:
+    """Folder the Jsonnet compositions are rendered into inside ``target``."""
+    return target / MonitorPaths.GRAFANA_JSONNET_OUTPUT_SUBDIR
+
+
+def _stage_bundled_dashboards(target: Path) -> None:
+    """Stage the dashboards that ship inside the installed package.
+
+    The folder the Jsonnet layer owns is skipped: it is regenerated from the
+    package sources, so staging the committed baseline there could only leave
+    a stale dashboard behind after a composition is renamed or removed.
+    """
+    source = MonitorPaths.GRAFANA_DASHBOARDS_DIR.resolve()
+    if source != target and source.is_dir():
+        _copy_dashboard_directory(
+            source, target, skip={MonitorPaths.GRAFANA_JSONNET_OUTPUT_SUBDIR}
+        )
+
+
+def _materialize_dashboards(config: Path, target: Path) -> None:
+    """Render a Jsonnet composition config into the runtime dashboards dir.
+
+    The renderer keeps the config path and the Jsonnet evaluation context in
+    its message, so a broken config fails the startup with an actionable error
+    instead of starting Grafana with an empty or partial dashboard set.
+    """
+    if not config.is_file():
+        raise RuntimeError(f"Grafana dashboard config {str(config)!r} does not exist.")
+    try:
+        materialize_dashboards(config, target)
+    except JsonnetRenderError as error:
+        raise RuntimeError(f"Grafana dashboard generation failed: {error}") from error
+
+
+def _merge_extra_dashboards(conf: DictConfig, target: Path) -> None:
+    """Copy ``grafana.extra_dashboard_dir`` onto the staged base source."""
     extra = OmegaConf.select(conf, "grafana.extra_dashboard_dir")
     if extra is None:
-        return target
+        return
 
     planned_json = {
         path.relative_to(target)
@@ -940,7 +1033,7 @@ def _stage_grafana_dashboards(conf: DictConfig, runtime_dir: Path) -> Path:
     }
     extra_source = Path(str(extra)).resolve()
     if extra_source == target:
-        return target
+        return
     if not extra_source.exists():
         raise RuntimeError(
             f"Extra Grafana dashboard directory {str(extra_source)!r} does not exist."
@@ -961,11 +1054,14 @@ def _stage_grafana_dashboards(conf: DictConfig, runtime_dir: Path) -> Path:
         planned_json.add(relative_path)
 
     _copy_dashboard_directory(extra_source, target)
-    return target
 
 
-def _copy_dashboard_directory(source: Path, target: Path) -> None:
+def _copy_dashboard_directory(
+    source: Path, target: Path, *, skip: Collection[str] = ()
+) -> None:
     for item in source.iterdir():
+        if item.name in skip:
+            continue
         destination = target / item.name
         if item.is_file():
             if destination.is_dir():

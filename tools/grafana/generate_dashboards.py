@@ -12,19 +12,21 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-"""Render the registered Grafana dashboard compositions to committed JSON.
+"""Optional CLI for the production Grafana dashboard compositions.
 
-Thin wrapper around the generic framework generator
-(``tools/grafana/framework/generate.py``): the Jsonnet engine, deterministic
-serialization, and the render/check core are reused, not reimplemented. The
-only production-specific parts are the defaults — the composition registry
-entrypoint and the committed output directory.
+Normal use never needs this command. At startup
+``rl_insight.server.runtime`` renders the Jsonnet entrypoint bundled in the
+installed package, so a user or a dashboard developer only edits the package
+sources — nothing has to be generated and committed first.
 
-``--check`` compares the committed JSON against the freshly rendered
-dashboards by parsed-object equality (semantic check). The framework
-generator's own ``--check`` remains byte-exact for framework-owned outputs;
-production equality is defined semantically here so that serialization-only
-differences never mask or fake content drift.
+The CLI stays for internal/debug/CI work: refreshing the committed JSON
+baseline (kept only as a semantic reference) and verifying that this baseline
+still matches the Jsonnet sources.
+
+Evaluation and serialization are not implemented here — they come from
+:mod:`rl_insight.grafana.renderer`, the same core the runtime uses, so the CLI
+and the runtime can never disagree. ``--check`` compares parsed JSON objects,
+so serialization-only key-order differences never mask or fake content drift.
 """
 
 from __future__ import annotations
@@ -34,22 +36,20 @@ import json
 import sys
 from pathlib import Path
 
-TOOLS_GRAFANA_DIR = Path(__file__).resolve().parent
-FRAMEWORK_DIR = TOOLS_GRAFANA_DIR / "framework"
-sys.path.insert(0, str(FRAMEWORK_DIR))
+_REPO_ROOT = Path(__file__).resolve().parents[2]
+if (_REPO_ROOT / "rl_insight").is_dir() and str(_REPO_ROOT) not in sys.path:
+    # Running straight from a source checkout without an installed package.
+    sys.path.insert(0, str(_REPO_ROOT))
 
-from generate import generated_text, render  # noqa: E402  (framework core)
-
-DEFAULT_CONFIG = TOOLS_GRAFANA_DIR / "dashboards.jsonnet"
-DEFAULT_OUT_DIR = (
-    TOOLS_GRAFANA_DIR.parent.parent
-    / "rl_insight"
-    / "config"
-    / "services"
-    / "grafana"
-    / "dashboards"
-    / "verl"
+from rl_insight.grafana.renderer import (  # noqa: E402
+    JsonnetRenderError,
+    generated_text,
+    render_dashboards,
 )
+from rl_insight.utils.constants import MonitorPaths  # noqa: E402
+
+DEFAULT_CONFIG = MonitorPaths.GRAFANA_JSONNET_ENTRYPOINT
+DEFAULT_OUT_DIR = MonitorPaths.GRAFANA_JSONNET_OUTPUT_DIR
 
 
 def main() -> int:
@@ -74,8 +74,8 @@ def main() -> int:
     args = parser.parse_args()
 
     try:
-        dashboards = render(args.config)
-    except RuntimeError as error:
+        dashboards = render_dashboards(args.config)
+    except JsonnetRenderError as error:
         print(f"error: {error}", file=sys.stderr)
         return 2
 
