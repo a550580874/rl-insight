@@ -1,7 +1,7 @@
 import { MODULE_KEYS, type MacroTotals, type MealItem, type MealPlan, type ModuleKey, type TrainingAfterMeal } from '../../shared/types';
 import { planMacros } from '../../shared/nutrition/mealPlan';
-import { computeDefaultCalories, computeDayTargets } from '../../shared/nutrition/targets';
-import { getFoodsByIds, getRecord, listRecords, saveRecord } from '../db';
+import { computeDayTargets, startingCaloriesFor } from '../../shared/nutrition/targets';
+import { getFoodsByIds, getRecord, getSettings, listRecords, saveRecord } from '../db';
 import type { Ctx } from '../env';
 import { HttpError, booleanValue, finiteNumber, isoDate, json, oneOf, readJson } from '../http';
 
@@ -88,9 +88,12 @@ export async function putRecordHandler(ctx: Ctx): Promise<Response> {
     ? planMacros({ breakfast: [], lunch: [], dinner: [], postWorkout: plan.postWorkout }, foods, true)
     : zeroTotals();
 
+  // The client normally sends the day target it computed. When it does not
+  // (API use, imports), fall back to the user's stored profile so the result
+  // matches the settings page instead of the shipped 1900 kcal / 70 kg defaults.
   const targetCalories =
     body.targetCalories === undefined || body.targetCalories === null
-      ? computeDefaultCalories(weightKg)
+      ? startingCaloriesFor(weightKg, await getSettings(ctx.db))
       : finiteNumber(body.targetCalories, 'targetCalories', CALORIES);
 
   const dayTargets = computeDayTargets({ weightKg, trainingDay, targetCalories, postWorkout });

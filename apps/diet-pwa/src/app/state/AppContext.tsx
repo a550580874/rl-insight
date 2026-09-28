@@ -6,7 +6,7 @@
  */
 
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
-import { ApiError, api } from '../api';
+import { ApiError, api, setUnauthorizedHandler } from '../api';
 import type { AuthStatus, Food, FoodInput, Settings, SettingsInput } from '../../shared/types';
 
 export type AppStatus = 'loading' | 'locked' | 'ready' | 'error';
@@ -103,6 +103,20 @@ export function AppProvider({ children }: { children: ReactNode }) {
     setAuth({ pinConfigured: true, authenticated: false });
     setFoods([]);
   }, []);
+
+  // A 401 from a protected call means the session is gone (30 day cookie
+  // expired, PIN changed, logged out in another tab). Send the user back to the
+  // PIN screen instead of letting auto save fail silently in the background.
+  const relock = useCallback(() => {
+    setAuth((previous) => ({ ...previous, authenticated: false }));
+    setStatus('locked');
+    setFoods([]);
+  }, []);
+
+  useEffect(() => {
+    setUnauthorizedHandler(relock);
+    return () => setUnauthorizedHandler(null);
+  }, [relock]);
 
   const refreshFoods = useCallback(async () => {
     const response = await api.listFoods();

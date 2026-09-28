@@ -23,11 +23,31 @@ export class ApiError extends Error {
   }
 }
 
+/**
+ * Called when a protected request comes back 401 - the 30 day session cookie
+ * expired, the PIN was changed elsewhere or the user logged out in another tab.
+ * The app provider uses it to drop straight back to the PIN screen instead of
+ * leaving the user on stale data with failing saves.
+ */
+type UnauthorizedHandler = () => void;
+let onUnauthorized: UnauthorizedHandler | null = null;
+
+export function setUnauthorizedHandler(handler: UnauthorizedHandler | null): void {
+  onUnauthorized = handler;
+}
+
+/** Endpoints where a 401 is a normal answer rather than an expired session. */
+const PUBLIC_PATHS = ['/api/auth/status', '/api/auth/pin', '/api/auth/logout'];
+
 async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
   const headers = new Headers(init.headers);
   if (init.body !== undefined) headers.set('content-type', 'application/json');
 
   const response = await fetch(path, { ...init, headers, credentials: 'same-origin' });
+
+  if (response.status === 401 && !PUBLIC_PATHS.includes(path)) {
+    onUnauthorized?.();
+  }
 
   const text = await response.text();
   let payload: unknown = null;

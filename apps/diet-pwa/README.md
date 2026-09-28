@@ -89,15 +89,26 @@ For a Vite dev server with hot reload, run `npm run dev` (port 5199) — it prox
 ```bash
 npm run lint
 npm run typecheck               # 4 tsconfigs: app / worker / node / tests
-npm test                        # 40 unit tests
+npm test                        # 45 unit tests
 npm run build
 npm run db:migrate:local
+npm run smoke                   # 39 HTTP/API + PWA checks against wrangler dev
 ```
 
 The unit tests cover the eight contract scenarios: 70 kg and 60 kg training-day
 macros, 70 kg rest-day macros, the ~20 g dinner carbohydrate rule, the banana and
 protein powder counting towards the daily totals, locking chicken at 150 g, and
-rebalancing after a manual rice edit.
+rebalancing after a manual rice edit. They also pin the calorie profile rules
+(`suggestedCaloriesFor` / `startingCaloriesFor`).
+
+### Browser / mobile acceptance
+
+`e2e/mobile-acceptance.mjs` drives the real UI in a 390x844 touch viewport and
+checks PIN setup, the home summary, automatic grams, locking and rebalancing, the
+training/rest switch, the post-workout module, auto save plus refresh
+persistence, history and copy, food CRUD, settings and the PWA shell. It is kept
+out of `npm test` because it needs a browser and a throwaway local D1 — see the
+header of the file for the exact commands.
 
 ## API
 

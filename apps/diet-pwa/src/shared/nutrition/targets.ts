@@ -31,6 +31,42 @@ export function computeDefaultCalories(weightKg: number, config: NutritionConfig
   return computeSuggestedCalories(weightKg, config.baseCalories, config.referenceWeightKg);
 }
 
+/**
+ * The part of the user profile that drives calorie targets. `Settings` satisfies
+ * this shape, so the same helper can be used by the client, the Worker and the
+ * tests without dragging the whole settings object around.
+ */
+export interface CalorieProfile {
+  baseCalories: number;
+  baseWeightKg: number;
+  /** User editable "当前默认热量目标". */
+  defaultCalories: number;
+}
+
+/**
+ * Suggested calories for the user's own profile: baseCalories x weight / baseWeight.
+ *
+ * This is what the settings page describes and what the home page must show, so
+ * editing 基准体重 / 基准热量 changes the suggestion everywhere instead of only
+ * in the settings page.
+ */
+export function suggestedCaloriesFor(weightKg: number, profile: CalorieProfile): number {
+  return computeSuggestedCalories(weightKg, profile.baseCalories, profile.baseWeightKg);
+}
+
+/**
+ * Calories a brand new day starts with: the user's stored 默认热量目标 when it is
+ * set, otherwise the weight based suggestion for this profile.
+ *
+ * Body weight changes refresh the *suggestion*; they must not silently keep an
+ * already persisted day target (contract §3), so this is only used when a day
+ * has no record yet.
+ */
+export function startingCaloriesFor(weightKg: number, profile: CalorieProfile): number {
+  const fallback = suggestedCaloriesFor(weightKg, profile);
+  return Number.isFinite(profile.defaultCalories) && profile.defaultCalories > 0 ? profile.defaultCalories : fallback;
+}
+
 /** Daily macro targets derived from body weight and training status. */
 export function computeDailyTargets(
   weightKg: number,

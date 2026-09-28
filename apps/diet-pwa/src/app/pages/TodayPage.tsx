@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { NUTRITION_CONFIG } from '../../shared/nutrition/config';
 import { computeDayPlan, emptyPlan, optimizePreWorkoutCarbs } from '../../shared/nutrition/mealPlan';
-import { computeDefaultCalories } from '../../shared/nutrition/targets';
+import { startingCaloriesFor, suggestedCaloriesFor, type CalorieProfile } from '../../shared/nutrition/targets';
 import {
   MEAL_KEYS,
   type ComputedMealItem,
@@ -40,6 +40,20 @@ type SaveState = 'idle' | 'saving' | 'saved' | 'error';
 export function TodayPage() {
   const { foods, settings, notify } = useApp();
 
+  /**
+   * The user's calorie profile. The home page must use *their* base weight and
+   * base calories (not the shipped 70 kg / 1900 kcal defaults), otherwise the
+   * suggestion here contradicts the settings page (§3).
+   */
+  const calorieProfile = useMemo<CalorieProfile>(
+    () => ({
+      baseCalories: settings?.baseCalories ?? NUTRITION_CONFIG.baseCalories,
+      baseWeightKg: settings?.baseWeightKg ?? NUTRITION_CONFIG.referenceWeightKg,
+      defaultCalories: settings?.defaultCalories ?? 0,
+    }),
+    [settings],
+  );
+
   const date = useMemo(() => todayIso(), []);
   const [plan, setPlan] = useState<MealPlan>(emptyPlan);
   const [weightKg, setWeightKg] = useState(settings?.currentWeightKg ?? 70);
@@ -47,7 +61,13 @@ export function TodayPage() {
   const [trainingAfterMeal, setTrainingAfterMeal] = useState<TrainingAfterMeal>(
     settings?.defaultTrainingAfterMeal ?? 'lunch',
   );
-  const [targetCalories, setTargetCalories] = useState(() => computeDefaultCalories(settings?.currentWeightKg ?? 70));
+  const [targetCalories, setTargetCalories] = useState(() =>
+    startingCaloriesFor(settings?.currentWeightKg ?? 70, {
+      baseCalories: settings?.baseCalories ?? NUTRITION_CONFIG.baseCalories,
+      baseWeightKg: settings?.baseWeightKg ?? NUTRITION_CONFIG.referenceWeightKg,
+      defaultCalories: settings?.defaultCalories ?? 0,
+    }),
+  );
   const [calorieManual, setCalorieManual] = useState(false);
   const [carbShift, setCarbShift] = useState(0);
 
@@ -97,7 +117,13 @@ export function TodayPage() {
           setWeightKg(settings.currentWeightKg);
           setTrainingDay(settings.defaultTrainingDay);
           setTrainingAfterMeal(settings.defaultTrainingAfterMeal);
-          setTargetCalories(computeDefaultCalories(settings.currentWeightKg));
+          setTargetCalories(
+            startingCaloriesFor(settings.currentWeightKg, {
+              baseCalories: settings.baseCalories,
+              baseWeightKg: settings.baseWeightKg,
+              defaultCalories: settings.defaultCalories,
+            }),
+          );
           setPlan({
             breakfast: [],
             lunch: [],
@@ -216,7 +242,7 @@ export function TodayPage() {
   const changeWeight = (next: number) => {
     setWeightKg(next);
     // Changing body weight refreshes the suggestion unless the day was overridden (§3).
-    if (!calorieManual) setTargetCalories(computeDefaultCalories(next));
+    if (!calorieManual) setTargetCalories(suggestedCaloriesFor(next, calorieProfile));
     touch();
   };
 
@@ -244,7 +270,7 @@ export function TodayPage() {
 
   if (!loaded) return <Spinner label="正在读取今日记录…" />;
 
-  const suggested = computeDefaultCalories(weightKg);
+  const suggested = suggestedCaloriesFor(weightKg, calorieProfile);
   const totals = dayPlan.totals;
   const dailyTarget = dayPlan.dailyTarget;
 

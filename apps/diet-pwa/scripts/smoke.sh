@@ -157,6 +157,24 @@ check "GET /api/records?days=7 -> 200" 200 "$(code -b "$JAR" "$BASE/api/records?
 check "two records in history" 2 "$(body -b "$JAR" "$BASE/api/records?days=7" | json "['records'].__len__()")"
 
 echo
+echo "== 6b. new day without an explicit target uses the stored 默认热量目标"
+check "PUT /api/settings 默认热量目标 1800 -> 200" 200 \
+  "$(code -b "$JAR" -X PUT -H 'content-type: application/json' \
+    -d '{"currentWeightKg":80,"baseWeightKg":70,"baseCalories":1900,"defaultCalories":1800,"defaultTrainingDay":true,"defaultTrainingAfterMeal":"lunch"}' \
+    "$BASE/api/settings")"
+check "settings keeps defaultCalories = 1800" 1800 "$(body -b "$JAR" "$BASE/api/settings" | json "['settings']['defaultCalories']")"
+check "record without targetCalories -> 200" 200 \
+  "$(code -b "$JAR" -X PUT -H 'content-type: application/json' \
+    -d '{"weightKg":75,"trainingDay":true,"trainingAfterMeal":"lunch","calorieTargetManual":false,"plan":{"breakfast":[],"lunch":[],"dinner":[],"postWorkout":[]}}' \
+    "$BASE/api/records/2026-10-05")"
+check "falls back to 默认热量目标 1800 (not 1900 x w / 70)" 1800 \
+  "$(body -b "$JAR" "$BASE/api/records/2026-10-05" | json "['record']['targetCalories']")"
+check "explicit targetCalories still wins" 2500 \
+  "$(body -b "$JAR" -X PUT -H 'content-type: application/json' \
+    -d '{"weightKg":75,"trainingDay":true,"trainingAfterMeal":"lunch","targetCalories":2500,"calorieTargetManual":true,"plan":{"breakfast":[],"lunch":[],"dinner":[],"postWorkout":[]}}' \
+    "$BASE/api/records/2026-10-05" | json "['record']['targetCalories']")"
+
+echo
 echo "== 7. PIN rejection + logout"
 check "wrong PIN -> 401" 401 \
   "$(code -X POST -H 'content-type: application/json' -d '{"pin":"999999"}' "$BASE/api/auth/pin")"
