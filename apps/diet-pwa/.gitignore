@@ -1,0 +1,12 @@
+# Build output and local tooling state
+dist/
+.wrangler/
+.wrangler-logs/
+.wrangler-xdg/
+.npm-cache/
+node_modules/
+coverage/
+*.local
+.DS_Store
+
+.wrangler-smoke/
