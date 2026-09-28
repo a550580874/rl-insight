@@ -14,9 +14,10 @@ export default tseslint.config(
     languageOptions: { globals: { ...globals.serviceworker } },
   },
   {
-    // Build / tooling scripts run on Node.
-    files: ['tools/**/*.mjs', '*.config.js'],
-    languageOptions: { globals: { ...globals.node } },
+    // Build / tooling scripts run on Node. The e2e harness also inspects the
+    // page, so its `page.evaluate` callbacks need the browser globals too.
+    files: ['tools/**/*.mjs', 'e2e/**/*.mjs', 'scripts/**/*.mjs', '*.config.js'],
+    languageOptions: { globals: { ...globals.node, ...globals.browser } },
   },
   {
     files: ['**/*.{ts,tsx}'],

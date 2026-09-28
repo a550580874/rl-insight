@@ -1,5 +1,6 @@
-import { MODULE_KEYS, type MacroTotals, type MealItem, type MealPlan, type ModuleKey, type TrainingAfterMeal } from '../../shared/types';
+import { MODULE_KEYS, QUANTITY_TYPES, type Food, type MacroTotals, type MealItem, type MealPlan, type ModuleKey, type QuantityType, type TrainingAfterMeal } from '../../shared/types';
 import { planMacros } from '../../shared/nutrition/mealPlan';
+import { effectiveGrams, hasServingNutrition } from '../../shared/nutrition/serving';
 import { computeDayTargets, startingCaloriesFor } from '../../shared/nutrition/targets';
 import { getFoodsByIds, getRecord, getSettings, listRecords, saveRecord } from '../db';
 import type { Ctx } from '../env';
@@ -8,6 +9,7 @@ import { HttpError, booleanValue, finiteNumber, isoDate, json, oneOf, readJson }
 const WEIGHT = { min: 20, max: 400 } as const;
 const CALORIES = { min: 500, max: 8000 } as const;
 const GRAMS = { min: 0, max: 5000 } as const;
+const SERVINGS = { min: 0, max: 1000 } as const;
 const MEALS = ['breakfast', 'lunch', 'dinner'] as const;
 const MAX_ITEMS_PER_MODULE = 30;
 
@@ -39,15 +41,51 @@ export function parsePlan(value: unknown): MealPlan {
       if (!Number.isInteger(foodId)) throw new HttpError(400, 'invalid_plan', 'foodId 必须是整数');
       if (seen.has(foodId)) throw new HttpError(400, 'invalid_plan', '同一餐中不能重复添加同一种食物');
       seen.add(foodId);
+      // A payload without quantityType is a client written before 按份 existed
+      // and is grams, which is also the column default.
+      const quantityType: QuantityType =
+        item.quantityType === undefined || item.quantityType === null
+          ? 'grams'
+          : oneOf(item.quantityType, QUANTITY_TYPES, `${key}.quantityType`);
       items.push({
         foodId,
         grams: finiteNumber(item.grams ?? 0, `${key}.grams`, GRAMS),
+        quantityType,
+        servings:
+          quantityType === 'servings' ? finiteNumber(item.servings ?? 0, `${key}.servings`, SERVINGS) : 0,
         locked: booleanValue(item.locked, false),
       });
     }
     plan[key] = items;
   }
   return plan;
+}
+
+/**
+ * Re-check every 按份 item against the food it points at and re-derive its
+ * effective grams. The client is never trusted for either.
+ */
+export function resolvePlanQuantities(plan: MealPlan, foods: readonly Food[]): MealPlan {
+  const foodById = new Map(foods.map((food) => [food.id, food]));
+  const resolved: MealPlan = { breakfast: [], lunch: [], dinner: [], postWorkout: [] };
+
+  for (const key of MODULE_KEYS as readonly ModuleKey[]) {
+    resolved[key] = plan[key].map((item) => {
+      const food = foodById.get(item.foodId);
+      if (!food) throw new HttpError(400, 'unknown_food', '计划中包含不存在的食物，请先刷新食物库');
+      if (item.quantityType !== 'servings') return { ...item, servings: 0 };
+      if (!hasServingNutrition(food)) {
+        throw new HttpError(400, 'serving_not_supported', `食物「${food.name}」没有启用按份，请改用重量`);
+      }
+      if (item.servings <= 0) {
+        throw new HttpError(400, 'invalid_plan', `「${food.name}」的份数必须大于 0`);
+      }
+      // grams stays the effective weight so the optimizer and the history keep
+      // working; the user's original serving count is stored next to it.
+      return { ...item, grams: effectiveGrams(food, item) };
+    });
+  }
+  return resolved;
 }
 
 export async function getRecordHandler(ctx: Ctx): Promise<Response> {
@@ -83,9 +121,10 @@ export async function putRecordHandler(ctx: Ctx): Promise<Response> {
   if (foods.length !== foodIds.length) {
     throw new HttpError(400, 'unknown_food', '计划中包含不存在的食物，请先刷新食物库');
   }
+  const quantities = resolvePlanQuantities(plan, foods);
 
   const postWorkout = trainingDay
-    ? planMacros({ breakfast: [], lunch: [], dinner: [], postWorkout: plan.postWorkout }, foods, true)
+    ? planMacros({ breakfast: [], lunch: [], dinner: [], postWorkout: quantities.postWorkout }, foods, true)
     : zeroTotals();
 
   // The client normally sends the day target it computed. When it does not
@@ -97,7 +136,7 @@ export async function putRecordHandler(ctx: Ctx): Promise<Response> {
       : finiteNumber(body.targetCalories, 'targetCalories', CALORIES);
 
   const dayTargets = computeDayTargets({ weightKg, trainingDay, targetCalories, postWorkout });
-  const actual = planMacros(plan, foods, trainingDay);
+  const actual = planMacros(quantities, foods, trainingDay);
 
   const saved = await saveRecord(ctx.db, {
     date,
@@ -113,7 +152,7 @@ export async function putRecordHandler(ctx: Ctx): Promise<Response> {
     actualCarbs: actual.carbs,
     actualProtein: actual.protein,
     actualFat: actual.fat,
-    plan,
+    plan: quantities,
   });
 
   return json({ record: saved });

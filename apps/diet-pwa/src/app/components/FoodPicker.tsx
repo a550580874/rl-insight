@@ -80,6 +80,11 @@ export function FoodPicker({
                     每100g {food.carbsPer100g}C / {food.proteinPer100g}P / {food.fatPer100g}F ·{' '}
                     {food.kcalPer100g} kcal
                   </span>
+                  {food.servingEnabled ? (
+                    <span className="block text-[11px] tabular-nums text-emerald-600">
+                      按份 1{food.unitLabel ?? '份'} = {food.kcalPerServing ?? 0} kcal
+                    </span>
+                  ) : null}
                 </span>
                 <span className="shrink-0 text-slate-300">＋</span>
               </button>

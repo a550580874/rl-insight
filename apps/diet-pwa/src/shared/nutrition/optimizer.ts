@@ -21,20 +21,21 @@
  *   - Locked foods are removed from the search space and simply contribute a
  *     fixed amount, so "lock chicken at 150 g" and "rebalance after a manual
  *     edit" reduce to the same code path.
+ *   - 按份 foods (see `serving.ts`) are treated the same way: the user's serving
+ *     count is a decision, so the item contributes its exact per-serving macros
+ *     and the remaining foods are rebalanced around it. A 按份 food therefore
+ *     never has its grams silently rewritten, with or without a serving weight.
  */
 
-import type { FoodRole, MacroTargets, MacroTotals, MealItem } from '../types';
+import type { FoodRole, MacroTargets, MacroTotals, MealItem, QuantityType } from '../types';
 import { KCAL_PER_GRAM, NUTRITION_CONFIG, type NutritionConfig, type OptimizerConfig } from './config';
+import { effectiveGrams, calculateFoodNutrition, hasServingNutrition, type NutritionSource } from './serving';
 import { round1, round2 } from './targets';
 
-export interface OptimizerFood {
+export interface OptimizerFood extends NutritionSource {
   id: number;
   name: string;
   role: FoodRole;
-  kcalPer100g: number;
-  proteinPer100g: number;
-  fatPer100g: number;
-  carbsPer100g: number;
   minGrams: number;
   maxGrams: number;
   stepGrams: number;
@@ -66,7 +67,17 @@ interface FoodVector {
 interface Variable {
   food: OptimizerFood;
   grams: number;
+  /** The optimizer's own "do not search this" flag (user lock or 按份 item). */
   locked: boolean;
+  /** The item as the user saved it, so the 按份 quantity round-trips unchanged. */
+  origin: MealItem;
+  /**
+   * Exact nutrition for a 按份 item. Such an item is a fixed contribution: it has
+   * no per-gram vector in the search, so the optimizer can neither inflate nor
+   * shrink it. When the serving weight is known this is still derivable from
+   * `grams`, but the per-serving numbers stay the single source of truth.
+   */
+  fixedMacros?: FoodVector;
 }
 
 /** Nutrition of one food at a given weight. */
@@ -120,7 +131,7 @@ function errorScales(target: MacroTargets, calories: number, cfg: OptimizerConfi
 function sumVectors(vars: readonly Variable[]): FoodVector {
   const total: FoodVector = { carbs: 0, protein: 0, fat: 0, calories: 0 };
   for (const variable of vars) {
-    const macros = foodMacrosAt(variable.food, variable.grams);
+    const macros = variable.fixedMacros ?? foodMacrosAt(variable.food, variable.grams);
     total.carbs += macros.carbs;
     total.protein += macros.protein;
     total.fat += macros.fat;
@@ -178,6 +189,8 @@ function objective(vars: readonly Variable[], target: MacroTargets, cfg: Optimiz
   const totals = sumVectors(vars);
   let value = macroObjective(totals, target, calories, cfg);
   for (const variable of vars) {
+    // A fixed contribution has no weight to judge, so no guard / anchor applies.
+    if (variable.fixedMacros) continue;
     value += guardPenalty(variable.food, variable.grams, target, cfg);
     value += anchorPenalty(variable.food, variable.grams, cfg);
   }
@@ -292,13 +305,34 @@ export function optimizeMeal(request: OptimizeRequest): OptimizeResult {
   for (const item of request.items) {
     const food = foodById.get(item.foodId);
     if (!food) continue;
+
+    // 按份 items are a user decision (2 个鸡蛋), not a starting point: they are
+    // folded into the totals as a fixed contribution and never enter the gram
+    // search, so the optimizer rebalances the remaining foods around them.
+    if (item.quantityType === 'servings' && hasServingNutrition(food)) {
+      const macros = calculateFoodNutrition(food, item);
+      variables.push({
+        food,
+        grams: effectiveGrams(food, item),
+        locked: true,
+        origin: item,
+        fixedMacros: {
+          carbs: round2(macros.carbs),
+          protein: round2(macros.protein),
+          fat: round2(macros.fat),
+          calories: round2(macros.calories),
+        },
+      });
+      continue;
+    }
+
     const grams = item.locked
       ? round1(clamp(item.grams, food.minGrams, food.maxGrams))
       : initialGrams(food, request.target, cfg, roleCounts);
-    variables.push({ food, grams, locked: item.locked });
+    variables.push({ food, grams, locked: item.locked, origin: item });
   }
 
-  const free = variables.filter((variable) => !variable.locked);
+  const free = variables.filter((variable) => !variable.locked && !variable.fixedMacros);
   let current = objective(variables, request.target, optimizer);
   let sweeps = 0;
 
@@ -347,7 +381,10 @@ export function optimizeMeal(request: OptimizeRequest): OptimizeResult {
     items: variables.map((variable) => ({
       foodId: variable.food.id,
       grams: round1(variable.grams),
-      locked: variable.locked,
+      quantityType: variable.origin.quantityType as QuantityType,
+      servings: variable.origin.servings,
+      // The user's own lock flag, not the optimizer's internal "do not search".
+      locked: variable.origin.locked,
     })),
     macros,
     target: {

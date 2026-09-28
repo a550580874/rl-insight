@@ -1,26 +1,22 @@
 /**
- * Application data provider: PIN gate, food library and settings.
+ * Application data provider: food library and settings.
  *
  * The daily plan lives in the Today page (it is per-day state); everything
  * shared between pages lives here.
  */
 
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
-import { ApiError, api, setUnauthorizedHandler } from '../api';
-import type { AuthStatus, Food, FoodInput, Settings, SettingsInput } from '../../shared/types';
+import { ApiError, api } from '../api';
+import type { Food, FoodInput, Settings, SettingsInput } from '../../shared/types';
 
-export type AppStatus = 'loading' | 'locked' | 'ready' | 'error';
+export type AppStatus = 'loading' | 'ready' | 'error';
 
 interface AppContextValue {
   status: AppStatus;
-  pinConfigured: boolean;
-  authError: string | null;
   fatalError: string | null;
   foods: Food[];
   settings: Settings | null;
   toast: string | null;
-  unlock: (pin: string) => Promise<void>;
-  logout: () => Promise<void>;
   notify: (message: string) => void;
   refreshFoods: () => Promise<void>;
   saveSettings: (patch: Partial<SettingsInput>) => Promise<void>;
@@ -39,8 +35,6 @@ export function useApp(): AppContextValue {
 
 export function AppProvider({ children }: { children: ReactNode }) {
   const [status, setStatus] = useState<AppStatus>('loading');
-  const [auth, setAuth] = useState<AuthStatus>({ pinConfigured: false, authenticated: false });
-  const [authError, setAuthError] = useState<string | null>(null);
   const [fatalError, setFatalError] = useState<string | null>(null);
   const [foods, setFoods] = useState<Food[]>([]);
   const [settings, setSettings] = useState<Settings | null>(null);
@@ -65,12 +59,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   const bootstrap = useCallback(async () => {
     try {
-      const authStatus = await api.authStatus();
-      setAuth(authStatus);
-      if (!authStatus.authenticated) {
-        setStatus('locked');
-        return;
-      }
       await loadData();
     } catch (error) {
       setFatalError(describe(error));
@@ -81,42 +69,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     void bootstrap();
   }, [bootstrap]);
-
-  const unlock = useCallback(
-    async (pin: string) => {
-      setAuthError(null);
-      try {
-        await api.unlock(pin);
-        setAuth({ pinConfigured: true, authenticated: true });
-        await loadData();
-      } catch (error) {
-        setAuthError(error instanceof ApiError ? error.message : '解锁失败，请重试');
-        throw error;
-      }
-    },
-    [loadData],
-  );
-
-  const logout = useCallback(async () => {
-    await api.logout();
-    setStatus('locked');
-    setAuth({ pinConfigured: true, authenticated: false });
-    setFoods([]);
-  }, []);
-
-  // A 401 from a protected call means the session is gone (30 day cookie
-  // expired, PIN changed, logged out in another tab). Send the user back to the
-  // PIN screen instead of letting auto save fail silently in the background.
-  const relock = useCallback(() => {
-    setAuth((previous) => ({ ...previous, authenticated: false }));
-    setStatus('locked');
-    setFoods([]);
-  }, []);
-
-  useEffect(() => {
-    setUnauthorizedHandler(relock);
-    return () => setUnauthorizedHandler(null);
-  }, [relock]);
 
   const refreshFoods = useCallback(async () => {
     const response = await api.listFoods();
@@ -175,14 +127,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const value = useMemo<AppContextValue>(
     () => ({
       status,
-      pinConfigured: auth.pinConfigured,
-      authError,
       fatalError,
       foods,
       settings,
       toast,
-      unlock,
-      logout,
       notify,
       refreshFoods,
       saveSettings,
@@ -192,14 +140,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
     }),
     [
       status,
-      auth.pinConfigured,
-      authError,
       fatalError,
       foods,
       settings,
       toast,
-      unlock,
-      logout,
       notify,
       refreshFoods,
       saveSettings,

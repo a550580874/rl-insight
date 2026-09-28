@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import type { ModuleResult } from '../../shared/types';
+import type { ModuleResult, QuantityType } from '../../shared/types';
 import { Button } from './ui';
 
 const MODULE_TITLES: Record<string, string> = {
@@ -15,7 +15,7 @@ function formatError(value: number): string {
 }
 
 /** Grams input that only commits on blur so typing "250" is not clamped mid-way. */
-function GramsInput({
+function NumberInput({
   value,
   step,
   disabled,
@@ -54,6 +54,8 @@ export function MealCard({
   disabled,
   onOpenPicker,
   onChangeGrams,
+  onChangeServings,
+  onChangeQuantityType,
   onToggleLock,
   onRemove,
   onRebalance,
@@ -63,6 +65,8 @@ export function MealCard({
   disabled: boolean;
   onOpenPicker: () => void;
   onChangeGrams: (foodId: number, grams: number) => void;
+  onChangeServings: (foodId: number, servings: number) => void;
+  onChangeQuantityType: (foodId: number, quantityType: QuantityType) => void;
   onToggleLock: (foodId: number) => void;
   onRemove: (foodId: number) => void;
   onRebalance: () => void;
@@ -82,63 +86,114 @@ export function MealCard({
 
       {hasItems ? (
         <ul className="mt-3 divide-y divide-slate-100">
-          {result.items.map((item) => (
-            <li key={item.foodId} className="flex items-center gap-2 py-2">
-              <button
-                type="button"
-                onClick={() => onToggleLock(item.foodId)}
-                aria-label={item.locked ? `解锁 ${item.name}` : `锁定 ${item.name}`}
-                className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-sm ${
-                  item.locked ? 'bg-amber-100 text-amber-700' : 'bg-slate-100 text-slate-400'
-                }`}
-              >
-                {item.locked ? '🔒' : '🔓'}
-              </button>
+          {result.items.map((item) => {
+            const byServing = item.quantityType === 'servings';
+            const unit = item.unitLabel ?? '份';
+            const step = item.servingStep > 0 ? item.servingStep : 1;
+            return (
+              <li key={item.foodId} className="flex items-center gap-2 py-2">
+                <button
+                  type="button"
+                  onClick={() => onToggleLock(item.foodId)}
+                  aria-label={item.locked ? `解锁 ${item.name}` : `锁定 ${item.name}`}
+                  className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-sm ${
+                    item.locked ? 'bg-amber-100 text-amber-700' : 'bg-slate-100 text-slate-400'
+                  }`}
+                >
+                  {item.locked ? '🔒' : '🔓'}
+                </button>
 
-              <div className="min-w-0 flex-1">
-                <div className="truncate text-sm text-slate-700">{item.name}</div>
-                <div className="text-[11px] tabular-nums text-slate-400">
-                  {item.macros.carbs}C · {item.macros.protein}P · {item.macros.fat}F · {Math.round(item.macros.calories)} kcal
-                  {item.units !== null && item.unitLabel ? ` · 约 ${item.units}${item.unitLabel}` : ''}
+                <div className="min-w-0 flex-1">
+                  <div className="truncate text-sm text-slate-700">{item.name}</div>
+                  <div className="text-[11px] tabular-nums text-slate-400">
+                    {item.macros.carbs}C · {item.macros.protein}P · {item.macros.fat}F ·{' '}
+                    {Math.round(item.macros.calories)} kcal
+                    {byServing
+                      ? ` · ${item.servings}${unit}`
+                      : item.units !== null && item.unitLabel
+                        ? ` · 约 ${item.units}${item.unitLabel}`
+                        : ''}
+                  </div>
+                  {item.servingEnabled ? (
+                    <div className="mt-1 flex items-center gap-1">
+                      {(['grams', 'servings'] as const).map((mode) => (
+                        <button
+                          key={mode}
+                          type="button"
+                          disabled={disabled}
+                          onClick={() => onChangeQuantityType(item.foodId, mode)}
+                          className={`rounded-md px-1.5 py-0.5 text-[10px] ${
+                            item.quantityType === mode
+                              ? 'bg-emerald-100 text-emerald-700'
+                              : 'bg-slate-100 text-slate-400'
+                          }`}
+                        >
+                          {mode === 'grams' ? '重量' : '份'}
+                        </button>
+                      ))}
+                      {byServing ? <span className="text-[10px] text-slate-400">1{unit}</span> : null}
+                    </div>
+                  ) : null}
                 </div>
-              </div>
 
-              <Button
-                size="sm"
-                variant="secondary"
-                className="!px-2"
-                disabled={disabled}
-                onClick={() => onChangeGrams(item.foodId, Math.max(item.grams - (item.unitGrams ?? 5), 0))}
-                ariaLabel="减少"
-              >
-                −
-              </Button>
-              <GramsInput
-                value={item.grams}
-                step={item.unitGrams ?? 5}
-                disabled={disabled}
-                onCommit={(grams) => onChangeGrams(item.foodId, grams)}
-              />
-              <Button
-                size="sm"
-                variant="secondary"
-                className="!px-2"
-                disabled={disabled}
-                onClick={() => onChangeGrams(item.foodId, item.grams + (item.unitGrams ?? 5))}
-                ariaLabel="增加"
-              >
-                +
-              </Button>
-              <button
-                type="button"
-                onClick={() => onRemove(item.foodId)}
-                aria-label={`删除 ${item.name}`}
-                className="shrink-0 px-1 text-slate-300"
-              >
-                ✕
-              </button>
-            </li>
-          ))}
+                <Button
+                  size="sm"
+                  variant="secondary"
+                  className="!px-2"
+                  disabled={disabled}
+                  onClick={() =>
+                    byServing
+                      ? onChangeServings(item.foodId, Math.max(item.servings - step, 0))
+                      : onChangeGrams(item.foodId, Math.max(item.grams - (item.unitGrams ?? 5), 0))
+                  }
+                  ariaLabel="减少"
+                >
+                  −
+                </Button>
+                {byServing ? (
+                  <NumberInput
+                    value={item.servings}
+                    step={step}
+                    disabled={disabled}
+                    onCommit={(servings) => onChangeServings(item.foodId, servings)}
+                  />
+                ) : (
+                  <NumberInput
+                    value={item.grams}
+                    step={item.unitGrams ?? 5}
+                    disabled={disabled}
+                    onCommit={(grams) => onChangeGrams(item.foodId, grams)}
+                  />
+                )}
+                <span className="w-14 shrink-0 text-[10px] text-slate-400">
+                  {byServing ? unit : 'g'}
+                  {byServing && item.grams > 0 ? ` · ${item.grams}g` : ''}
+                </span>
+                <Button
+                  size="sm"
+                  variant="secondary"
+                  className="!px-2"
+                  disabled={disabled}
+                  onClick={() =>
+                    byServing
+                      ? onChangeServings(item.foodId, item.servings + step)
+                      : onChangeGrams(item.foodId, item.grams + (item.unitGrams ?? 5))
+                  }
+                  ariaLabel="增加"
+                >
+                  +
+                </Button>
+                <button
+                  type="button"
+                  onClick={() => onRemove(item.foodId)}
+                  aria-label={`删除 ${item.name}`}
+                  className="shrink-0 px-1 text-slate-300"
+                >
+                  ✕
+                </button>
+              </li>
+            );
+          })}
         </ul>
       ) : (
         <p className="py-4 text-center text-xs text-slate-400">

@@ -1,15 +1,13 @@
 import { useEffect, useState } from 'react';
-import { api } from '../api';
 import type { SettingsInput, TrainingAfterMeal } from '../../shared/types';
 import { suggestedCaloriesFor } from '../../shared/nutrition/targets';
 import { Button, Card, Field, NumberField, SectionTitle, SegmentedControl, Toggle } from '../components/ui';
 import { useApp } from '../state/AppContext';
 
 export function SettingsPage() {
-  const { settings, saveSettings, logout, notify } = useApp();
+  const { settings, saveSettings } = useApp();
   const [draft, setDraft] = useState<SettingsInput | null>(null);
   const [defaultCaloriesTouched, setDefaultCaloriesTouched] = useState(false);
-  const [pinForm, setPinForm] = useState({ current: '', next: '' });
   const [busy, setBusy] = useState(false);
 
   useEffect(() => {
@@ -38,23 +36,6 @@ export function SettingsPage() {
         ? draft
         : { ...draft, defaultCalories: suggestedCaloriesFor(draft.currentWeightKg, draft) };
       await saveSettings(payload);
-    } finally {
-      setBusy(false);
-    }
-  };
-
-  const changePin = async () => {
-    if (!/^\d{4,8}$/.test(pinForm.current) || !/^\d{4,8}$/.test(pinForm.next)) {
-      notify('PIN 必须是 4-8 位数字');
-      return;
-    }
-    setBusy(true);
-    try {
-      await api.changePin(pinForm.current, pinForm.next);
-      setPinForm({ current: '', next: '' });
-      notify('PIN 已更新');
-    } catch (error) {
-      notify(error instanceof Error ? error.message : '修改失败');
     } finally {
       setBusy(false);
     }
@@ -132,45 +113,10 @@ export function SettingsPage() {
       </Button>
 
       <Card>
-        <SectionTitle>修改 PIN</SectionTitle>
-        <div className="flex gap-2">
-          <input
-            type="password"
-            inputMode="numeric"
-            placeholder="当前 PIN"
-            value={pinForm.current}
-            onChange={(event) => setPinForm({ ...pinForm, current: event.target.value.replace(/\D/g, '').slice(0, 8) })}
-            className="min-w-0 flex-1 rounded-xl border border-slate-200 px-3 py-2 text-sm outline-none focus:border-emerald-400"
-          />
-          <input
-            type="password"
-            inputMode="numeric"
-            placeholder="新 PIN"
-            value={pinForm.next}
-            onChange={(event) => setPinForm({ ...pinForm, next: event.target.value.replace(/\D/g, '').slice(0, 8) })}
-            className="min-w-0 flex-1 rounded-xl border border-slate-200 px-3 py-2 text-sm outline-none focus:border-emerald-400"
-          />
-        </div>
-        <Button className="mt-2" onClick={() => void changePin()} disabled={busy}>
-          更新 PIN
-        </Button>
-      </Card>
-
-      <Card>
-        <SectionTitle>数据与登录</SectionTitle>
+        <SectionTitle>数据存储</SectionTitle>
         <p className="text-[11px] leading-relaxed text-slate-500">
           体重、食物库、每日饮食与历史全部保存在 Cloudflare D1；本地 localStorage 只用于临时 UI 状态。
-          PIN 仅以 PBKDF2-SHA256 哈希保存，登录状态使用 HttpOnly Cookie，有效期 30 天。
         </p>
-        <Button
-          variant="danger"
-          className="mt-3"
-          onClick={() => {
-            void logout();
-          }}
-        >
-          退出登录
-        </Button>
       </Card>
     </div>
   );

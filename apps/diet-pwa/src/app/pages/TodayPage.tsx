@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { NUTRITION_CONFIG } from '../../shared/nutrition/config';
 import { computeDayPlan, emptyPlan, optimizePreWorkoutCarbs } from '../../shared/nutrition/mealPlan';
+import { effectiveGrams, hasServingNutrition, servingsForGrams } from '../../shared/nutrition/serving';
 import { startingCaloriesFor, suggestedCaloriesFor, type CalorieProfile } from '../../shared/nutrition/targets';
 import {
   MEAL_KEYS,
@@ -12,6 +13,7 @@ import {
   type MealKey,
   type MealPlan,
   type ModuleKey,
+  type QuantityType,
   type TrainingAfterMeal,
 } from '../../shared/types';
 import { api } from '../api';
@@ -33,6 +35,18 @@ function defaultServing(food: Food, module: ModuleKey): number {
   const step = food.stepGrams > 0 ? food.stepGrams : 5;
   const snapped = food.minGrams + Math.round((clamped - food.minGrams) / step) * step;
   return Math.round(Math.min(Math.max(snapped, food.minGrams), food.maxGrams) * 10) / 10;
+}
+
+/**
+ * How a food enters a meal the first time. A 按份 food starts as 1 份 (the unit
+ * the user thinks in); everything else keeps the legacy grams behaviour.
+ */
+function defaultItem(food: Food, module: ModuleKey): MealItem {
+  if (hasServingNutrition(food)) {
+    const servings = 1;
+    return { foodId: food.id, grams: effectiveGrams(food, { servings }), quantityType: 'servings', servings, locked: false };
+  }
+  return { foodId: food.id, grams: defaultServing(food, module), quantityType: 'grams', servings: 0, locked: false };
 }
 
 type SaveState = 'idle' | 'saving' | 'saved' | 'error';
@@ -87,8 +101,20 @@ export function TodayPage() {
       const items: MealItem[] = [];
       const banana = availableFoods.find((food) => food.name === config.bananaName && food.enabled);
       const powder = availableFoods.find((food) => food.name === config.proteinPowderName && food.enabled);
-      if (banana) items.push({ foodId: banana.id, grams: config.bananaDefaultGrams, locked: false });
-      if (powder) items.push({ foodId: powder.id, grams: config.proteinPowderDefaultGrams, locked: false });
+      if (banana) {
+        items.push(
+          hasServingNutrition(banana)
+            ? { foodId: banana.id, grams: effectiveGrams(banana, { servings: 1 }), quantityType: 'servings', servings: 1, locked: false }
+            : { foodId: banana.id, grams: config.bananaDefaultGrams, quantityType: 'grams', servings: 0, locked: false },
+        );
+      }
+      if (powder) {
+        items.push(
+          hasServingNutrition(powder)
+            ? { foodId: powder.id, grams: effectiveGrams(powder, { servings: 1 }), quantityType: 'servings', servings: 1, locked: false }
+            : { foodId: powder.id, grams: config.proteinPowderDefaultGrams, quantityType: 'grams', servings: 0, locked: false },
+        );
+      }
       return items;
     },
     [],
@@ -161,7 +187,13 @@ export function TodayPage() {
 
   const planForSave = useMemo<MealPlan>(() => {
     const toItems = (items: readonly ComputedMealItem[]): MealItem[] =>
-      items.map((item) => ({ foodId: item.foodId, grams: item.grams, locked: item.locked }));
+      items.map((item) => ({
+        foodId: item.foodId,
+        grams: item.grams,
+        quantityType: item.quantityType,
+        servings: item.servings,
+        locked: item.locked,
+      }));
     return {
       breakfast: toItems(dayPlan.modules.breakfast.items),
       lunch: toItems(dayPlan.modules.lunch.items),
@@ -208,15 +240,52 @@ export function TodayPage() {
   const addFood = (module: ModuleKey, foodId: number) => {
     const food = foods.find((candidate) => candidate.id === foodId);
     if (!food) return;
-    mutate(module, (items) => [...items, { foodId, grams: defaultServing(food, module), locked: false }]);
+    mutate(module, (items) => [...items, defaultItem(food, module)]);
   };
 
   const changeGrams = (module: ModuleKey, foodId: number, grams: number) => {
     // A hand edited weight is treated as a decision: lock it and rebalance the rest (§19).
     mutate(module, (items) =>
       items.map((item) =>
-        item.foodId === foodId ? { ...item, grams: Math.max(Math.round(grams * 10) / 10, 0), locked: true } : item,
+        item.foodId === foodId
+          ? { ...item, grams: Math.max(Math.round(grams * 10) / 10, 0), quantityType: 'grams', servings: 0, locked: true }
+          : item,
       ),
+    );
+  };
+
+  const changeServings = (module: ModuleKey, foodId: number, servings: number) => {
+    const food = foods.find((candidate) => candidate.id === foodId);
+    if (!food) return;
+    const step = food.servingStep > 0 ? food.servingStep : 1;
+    const next = Math.max(Math.round((servings / step) * 1000) / 1000 * step, 0);
+    // Same rule as grams: an explicit count is a decision, so it is locked.
+    mutate(module, (items) =>
+      items.map((item) =>
+        item.foodId === foodId
+          ? { ...item, quantityType: 'servings', servings: next, grams: effectiveGrams(food, { servings: next }), locked: true }
+          : item,
+      ),
+    );
+  };
+
+  /** Switch one item between 重量 and 份 without losing the amount. */
+  const changeQuantityType = (module: ModuleKey, foodId: number, quantityType: QuantityType) => {
+    const food = foods.find((candidate) => candidate.id === foodId);
+    if (!food) return;
+    mutate(module, (items) =>
+      items.map((item) => {
+        if (item.foodId !== foodId || item.quantityType === quantityType) return item;
+        if (quantityType === 'servings') {
+          // Keep the amount: 100 g of a 50 g serving becomes 2 个, not 1 个.
+          const fromGrams = servingsForGrams(food, item.grams, food.servingStep);
+          const servings = fromGrams > 0 ? fromGrams : item.servings > 0 ? item.servings : 1;
+          return { ...item, quantityType, servings, grams: effectiveGrams(food, { servings }) };
+        }
+        // Back to grams: keep the weight the serving count stood for.
+        const grams = item.grams > 0 ? item.grams : defaultServing(food, module);
+        return { ...item, quantityType: 'grams', servings: 0, grams };
+      }),
     );
   };
 
@@ -417,6 +486,8 @@ export function TodayPage() {
           disabled={false}
           onOpenPicker={() => setPickerModule(key)}
           onChangeGrams={(foodId, grams) => changeGrams(key, foodId, grams)}
+          onChangeServings={(foodId, servings) => changeServings(key, foodId, servings)}
+          onChangeQuantityType={(foodId, quantityType) => changeQuantityType(key, foodId, quantityType)}
           onToggleLock={(foodId) => toggleLock(key, foodId)}
           onRemove={(foodId) => removeItem(key, foodId)}
           onRebalance={() => rebalance(key)}
@@ -430,6 +501,8 @@ export function TodayPage() {
           disabled={false}
           onOpenPicker={() => setPickerModule('postWorkout')}
           onChangeGrams={(foodId, grams) => changeGrams('postWorkout', foodId, grams)}
+          onChangeServings={(foodId, servings) => changeServings('postWorkout', foodId, servings)}
+          onChangeQuantityType={(foodId, quantityType) => changeQuantityType('postWorkout', foodId, quantityType)}
           onToggleLock={(foodId) => toggleLock('postWorkout', foodId)}
           onRemove={(foodId) => removeItem('postWorkout', foodId)}
           onRebalance={() => rebalance('postWorkout')}

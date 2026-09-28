@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react';
 import { FOOD_CATEGORIES, FOOD_ROLES, type Food, type FoodInput, type FoodRole } from '../../shared/types';
+import { resolveServingNutrition } from '../../shared/nutrition/serving';
 import { Button, Card, EmptyState, Sheet } from '../components/ui';
 import { ROLE_LABELS, ROLE_TONES } from '../components/FoodPicker';
 import { useApp } from '../state/AppContext';
@@ -17,8 +18,14 @@ function toInput(food: Food): FoodInput {
     minGrams: food.minGrams,
     maxGrams: food.maxGrams,
     stepGrams: food.stepGrams,
+    servingEnabled: food.servingEnabled,
     unitLabel: food.unitLabel,
     unitGrams: food.unitGrams,
+    kcalPerServing: food.kcalPerServing,
+    proteinPerServing: food.proteinPerServing,
+    fatPerServing: food.fatPerServing,
+    carbsPerServing: food.carbsPerServing,
+    servingStep: food.servingStep,
   };
 }
 
@@ -34,8 +41,14 @@ const EMPTY_FOOD: FoodInput = {
   minGrams: 0,
   maxGrams: 300,
   stepGrams: 5,
+  servingEnabled: false,
   unitLabel: null,
   unitGrams: null,
+  kcalPerServing: null,
+  proteinPerServing: null,
+  fatPerServing: null,
+  carbsPerServing: null,
+  servingStep: 1,
 };
 
 function NumberRow({
@@ -60,6 +73,44 @@ function NumberRow({
         onChange={(event) => {
           const parsed = Number(event.target.value);
           onChange(Number.isFinite(parsed) ? parsed : 0);
+        }}
+        className="w-24 rounded-lg border border-slate-200 px-2 py-1 text-right text-sm tabular-nums outline-none focus:border-emerald-400"
+      />
+    </label>
+  );
+}
+
+/** Number input for an optional value: an empty field means "not set" (null). */
+function NullableNumberRow({
+  label,
+  value,
+  onChange,
+  step = 0.1,
+  placeholder = '留空',
+}: {
+  label: string;
+  value: number | null;
+  onChange: (value: number | null) => void;
+  step?: number;
+  placeholder?: string;
+}) {
+  return (
+    <label className="flex items-center justify-between gap-3 py-1.5">
+      <span className="text-xs text-slate-600">{label}</span>
+      <input
+        type="number"
+        inputMode="decimal"
+        step={step}
+        value={value === null ? '' : value}
+        placeholder={placeholder}
+        onChange={(event) => {
+          const raw = event.target.value;
+          if (raw.trim() === '') {
+            onChange(null);
+            return;
+          }
+          const parsed = Number(raw);
+          onChange(Number.isFinite(parsed) ? parsed : null);
         }}
         className="w-24 rounded-lg border border-slate-200 px-2 py-1 text-right text-sm tabular-nums outline-none focus:border-emerald-400"
       />
@@ -161,8 +212,18 @@ export function FoodsPage() {
                     </p>
                     <p className="text-[11px] tabular-nums text-slate-400">
                       份量 {food.minGrams}-{food.maxGrams}g · 步长 {food.stepGrams}g
-                      {food.unitLabel && food.unitGrams ? ` · 1${food.unitLabel}=${food.unitGrams}g` : ''}
+                      {!food.servingEnabled && food.unitLabel && food.unitGrams
+                        ? ` · 1${food.unitLabel}=${food.unitGrams}g`
+                        : ''}
                     </p>
+                    {food.servingEnabled ? (
+                      <p className="text-[11px] tabular-nums text-emerald-600">
+                        按份：1{food.unitLabel ?? '份'}
+                        {food.unitGrams ? ` ≈ ${food.unitGrams}g` : ''} ·{' '}
+                        {food.kcalPerServing ?? 0} kcal / {food.carbsPerServing ?? 0}C /{' '}
+                        {food.proteinPerServing ?? 0}P / {food.fatPerServing ?? 0}F
+                      </p>
+                    ) : null}
                   </div>
                 </div>
                 <div className="mt-2 flex gap-2">
@@ -281,29 +342,145 @@ export function FoodsPage() {
             </div>
 
             <div className="rounded-xl bg-slate-50 px-3 py-1">
-              <p className="pt-1 text-[11px] font-medium text-slate-500">显示单位（可选，底层仍按克计算）</p>
-              <label className="flex items-center justify-between gap-3 py-1.5">
-                <span className="text-xs text-slate-600">单位名称</span>
+              <p className="pt-1 text-[11px] font-medium text-slate-500">按份管理</p>
+              <label className="flex items-center justify-between py-1.5">
+                <span className="text-xs text-slate-600">启用按份</span>
                 <input
-                  value={editing.input.unitLabel ?? ''}
-                  placeholder="如 个 / ml"
+                  type="checkbox"
+                  checked={editing.input.servingEnabled}
                   onChange={(event) =>
-                    setEditing({
-                      ...editing,
-                      input: { ...editing.input, unitLabel: event.target.value.trim() || null },
-                    })
+                    setEditing({ ...editing, input: { ...editing.input, servingEnabled: event.target.checked } })
                   }
-                  className="w-24 rounded-lg border border-slate-200 px-2 py-1 text-right text-sm outline-none focus:border-emerald-400"
+                  className="h-4 w-4"
                 />
               </label>
-              <NumberRow
-                label="每单位克数"
-                value={editing.input.unitGrams ?? 0}
-                onChange={(value) =>
-                  setEditing({ ...editing, input: { ...editing.input, unitGrams: value > 0 ? value : null } })
-                }
-                step={1}
-              />
+
+              {editing.input.servingEnabled ? (
+                <>
+                  <p className="pb-1 text-[10px] text-slate-400">
+                    按份后可以直接记录「2 个鸡蛋」，每 100g 的数据继续保留，随时可切回重量。
+                  </p>
+                  <label className="flex items-center justify-between gap-3 py-1.5">
+                    <span className="text-xs text-slate-600">份单位</span>
+                    <input
+                      value={editing.input.unitLabel ?? ''}
+                      placeholder="个 / 根 / 片 / 勺"
+                      onChange={(event) =>
+                        setEditing({
+                          ...editing,
+                          input: { ...editing.input, unitLabel: event.target.value.trim() || null },
+                        })
+                      }
+                      className="w-24 rounded-lg border border-slate-200 px-2 py-1 text-right text-sm outline-none focus:border-emerald-400"
+                    />
+                  </label>
+                  <NullableNumberRow
+                    label="每份重量 g（可选）"
+                    value={editing.input.unitGrams}
+                    onChange={(value) =>
+                      setEditing({
+                        ...editing,
+                        input: { ...editing.input, unitGrams: value !== null && value > 0 ? value : null },
+                      })
+                    }
+                    step={1}
+                  />
+                  <NullableNumberRow
+                    label="每份热量 kcal"
+                    value={editing.input.kcalPerServing}
+                    onChange={(value) =>
+                      setEditing({ ...editing, input: { ...editing.input, kcalPerServing: value } })
+                    }
+                    step={1}
+                  />
+                  <NullableNumberRow
+                    label="每份碳水 g"
+                    value={editing.input.carbsPerServing}
+                    onChange={(value) =>
+                      setEditing({ ...editing, input: { ...editing.input, carbsPerServing: value } })
+                    }
+                  />
+                  <NullableNumberRow
+                    label="每份蛋白质 g"
+                    value={editing.input.proteinPerServing}
+                    onChange={(value) =>
+                      setEditing({ ...editing, input: { ...editing.input, proteinPerServing: value } })
+                    }
+                  />
+                  <NullableNumberRow
+                    label="每份脂肪 g"
+                    value={editing.input.fatPerServing}
+                    onChange={(value) =>
+                      setEditing({ ...editing, input: { ...editing.input, fatPerServing: value } })
+                    }
+                  />
+                  <div className="flex items-center justify-between gap-2 py-1.5">
+                    <span className="text-[10px] text-slate-400">
+                      {editing.input.unitGrams
+                        ? '按每100g × 每份重量换算'
+                        : '填写每份重量后才能自动换算'}
+                    </span>
+                    <Button
+                      size="sm"
+                      disabled={!editing.input.unitGrams}
+                      onClick={() => {
+                        const derived = resolveServingNutrition({
+                          servingEnabled: true,
+                          unitGrams: editing.input.unitGrams,
+                          kcalPer100g: editing.input.kcalPer100g,
+                          proteinPer100g: editing.input.proteinPer100g,
+                          fatPer100g: editing.input.fatPer100g,
+                          carbsPer100g: editing.input.carbsPer100g,
+                          kcalPerServing: null,
+                          proteinPerServing: null,
+                          fatPerServing: null,
+                          carbsPerServing: null,
+                        });
+                        setEditing({ ...editing, input: { ...editing.input, ...derived } });
+                      }}
+                    >
+                      按每100g自动计算每份
+                    </Button>
+                  </div>
+                  <NumberRow
+                    label="份数步长"
+                    value={editing.input.servingStep}
+                    onChange={(value) =>
+                      setEditing({
+                        ...editing,
+                        input: { ...editing.input, servingStep: value > 0 ? value : 1 },
+                      })
+                    }
+                    step={0.5}
+                  />
+                </>
+              ) : (
+                <>
+                  <p className="pb-1 text-[10px] text-slate-400">显示单位（可选，底层仍按克计算）</p>
+                  <label className="flex items-center justify-between gap-3 py-1.5">
+                    <span className="text-xs text-slate-600">单位名称</span>
+                    <input
+                      value={editing.input.unitLabel ?? ''}
+                      placeholder="如 个 / ml"
+                      onChange={(event) =>
+                        setEditing({
+                          ...editing,
+                          input: { ...editing.input, unitLabel: event.target.value.trim() || null },
+                        })
+                      }
+                      className="w-24 rounded-lg border border-slate-200 px-2 py-1 text-right text-sm outline-none focus:border-emerald-400"
+                    />
+                  </label>
+                  <NumberRow
+                    label="每单位克数"
+                    value={editing.input.unitGrams ?? 0}
+                    onChange={(value) =>
+                      setEditing({ ...editing, input: { ...editing.input, unitGrams: value > 0 ? value : null } })
+                    }
+                    step={1}
+                  />
+                </>
+              )}
             </div>
 
             <label className="flex items-center justify-between py-1">

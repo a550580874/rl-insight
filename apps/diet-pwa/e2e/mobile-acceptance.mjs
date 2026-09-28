@@ -34,10 +34,8 @@ const PIN = '246813';
 const NEW_PIN = '135790';
 
 const results = [];
-let failures = 0;
 function check(label, ok, detail = '') {
   results.push({ label, ok: !!ok, detail });
-  if (!ok) failures += 1;
   console.log(`${ok ? 'PASS' : 'FAIL'}  ${label}${detail ? `  [${detail}]` : ''}`);
 }
 function note(text) {
@@ -301,7 +299,7 @@ try {
   check('D1 实际碳水包含香蕉碳水', (rec?.actualCarbs ?? 0) > 1, `actualCarbs=${rec?.actualCarbs}`);
   const uiLunch = [];
   for (const food of ['熟米饭', '鸡胸肉', '西兰花', '橄榄油']) uiLunch.push([food, await gramsOf('午餐', food)]);
-  const sameLunch = uiLunch.every(([food, grams]) => (rec?.plan?.lunch ?? []).some((i) => i.grams === grams) || grams === 0);
+  const sameLunch = uiLunch.every(([, grams]) => (rec?.plan?.lunch ?? []).some((i) => i.grams === grams) || grams === 0);
   check('D1 午餐克数与界面一致（落库保真）', sameLunch, `UI=${JSON.stringify(uiLunch)} D1=${JSON.stringify(rec?.plan?.lunch)}`);
   const postCard = await meal('训练后补充').innerText();
   check('训练后模块显示实际碳水/蛋白', /实际碳水/.test(postCard) && /实际蛋白/.test(postCard));
@@ -452,7 +450,7 @@ try {
     const themeColor = document.querySelector('meta[name=theme-color]')?.getAttribute('content') ?? null;
     const appleIcon = document.querySelector('link[rel=apple-touch-icon]')?.getAttribute('href') ?? null;
     const manifest = manifestLink ? await (await fetch(manifestLink)).json() : null;
-    let swCount = -1;
+    let swCount;
     try {
       swCount = (await navigator.serviceWorker.getRegistrations()).length;
     } catch {
