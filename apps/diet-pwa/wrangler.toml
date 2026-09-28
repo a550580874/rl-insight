@@ -1,0 +1,36 @@
+# MING-22 / diet-pwa - Cloudflare Workers + static assets + D1.
+#
+# Deployment steps (performed by the parent task after member confirmation, see
+# README):
+#   npx wrangler d1 create diet-pwa            # prints the real database_id
+#   # paste that id into `database_id` below
+#   npm run db:migrate:remote
+#   npm run cf:deploy
+#
+# Nothing here creates or touches remote resources on its own.
+
+name = "diet-pwa"
+main = "src/worker/index.ts"
+compatibility_date = "2026-09-01"
+
+# The Vite build output is served as static assets. `/api/*` must reach the
+# Worker first; everything else is served straight from the asset store, with
+# index.html as the SPA fallback.
+[assets]
+directory = "./dist"
+binding = "ASSETS"
+not_found_handling = "single-page-application"
+run_worker_first = ["/api/*"]
+
+[[d1_databases]]
+binding = "DB"
+database_name = "diet-pwa"
+# Placeholder. Replace with the id printed by `wrangler d1 create diet-pwa`.
+database_id = "00000000-0000-0000-0000-000000000000"
+migrations_dir = "migrations"
+
+[dev]
+port = 8788
+
+[observability]
+enabled = true
