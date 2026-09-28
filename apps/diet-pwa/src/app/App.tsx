@@ -3,7 +3,6 @@ import { BottomNav, type PageKey } from './components/BottomNav';
 import { Button, Card } from './components/ui';
 import { FoodsPage } from './pages/FoodsPage';
 import { HistoryPage } from './pages/HistoryPage';
-import { LockPage } from './pages/LockPage';
 import { SettingsPage } from './pages/SettingsPage';
 import { TodayPage } from './pages/TodayPage';
 import { useApp } from './state/AppContext';
@@ -16,7 +15,7 @@ const PAGE_TITLES: Record<PageKey, string> = {
 };
 
 export function App() {
-  const { status, pinConfigured, authError, fatalError, toast, settings, unlock } = useApp();
+  const { status, fatalError, toast, settings } = useApp();
   const [page, setPage] = useState<PageKey>('today');
 
   if (status === 'loading') {
@@ -41,8 +40,8 @@ export function App() {
     );
   }
 
-  if (status === 'locked' || !settings) {
-    return <LockPage pinConfigured={pinConfigured} error={authError} onUnlock={unlock} />;
+  if (!settings) {
+    return <div className="flex min-h-dvh items-center justify-center bg-slate-100 text-xs text-slate-400">正在加载…</div>;
   }
 
   return (

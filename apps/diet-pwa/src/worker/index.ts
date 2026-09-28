@@ -7,19 +7,13 @@
  */
 
 import type { Ctx, Env, Route } from './env';
-import { HttpError, errorResponse, json, toErrorResponse } from './http';
-import { authChangePin, authLogout, authPin, authStatus, resolveAuth } from './handlers/auth';
+import { HttpError, json, toErrorResponse } from './http';
 import { createFoodHandler, deleteFoodHandler, listFoodsHandler, updateFoodHandler } from './handlers/foods';
 import { copyRecordHandler, getRecordHandler, listRecordsHandler, putRecordHandler } from './handlers/records';
 import { getSettingsHandler, updateSettingsHandler } from './handlers/settings';
 
 const routes: Route[] = [
   { method: 'GET', pattern: '/api/health', handler: health, auth: 'none' },
-
-  { method: 'GET', pattern: '/api/auth/status', handler: authStatus, auth: 'none' },
-  { method: 'POST', pattern: '/api/auth/pin', handler: authPin, auth: 'none' },
-  { method: 'POST', pattern: '/api/auth/pin/change', handler: authChangePin, auth: 'required' },
-  { method: 'POST', pattern: '/api/auth/logout', handler: authLogout, auth: 'none' },
 
   { method: 'GET', pattern: '/api/foods', handler: listFoodsHandler },
   { method: 'POST', pattern: '/api/foods', handler: createFoodHandler },
@@ -76,11 +70,7 @@ export default {
         const params = matchRoute(route.pattern, url.pathname);
         if (!params) continue;
 
-        const auth = await resolveAuth(env.DB, request);
-        if ((route.auth ?? 'required') === 'required' && !auth.authenticated) {
-          return errorResponse(401, 'unauthorized', '请先输入 PIN 解锁');
-        }
-
+        const auth = { authenticated: false, token: null, sessionId: null } as const;
         const ctx: Ctx = { request, env, url, params, db: env.DB, auth };
         return await route.handler(ctx);
       }

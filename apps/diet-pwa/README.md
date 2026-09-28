@@ -9,6 +9,9 @@ and calorie targets.
 The app lives entirely under `apps/diet-pwa/`. It does not touch, import or
 replace anything in the existing Python `rl-insight` project.
 
+This is intentionally a personal, single-user app. It has no account system or
+access control; anyone with the deployed URL can access the same data.
+
 ## Stack
 
 | Layer     | Choice                                                        |
@@ -33,7 +36,7 @@ apps/diet-pwa/
 │   │       ├── targets.ts  weight -> daily macros -> per-meal targets
 │   │       ├── optimizer.ts constrained weighted least squares solver
 │   │       └── mealPlan.ts day-plan orchestration
-│   ├── worker/             API: http helpers, D1 access layer, PIN auth, routes
+│   ├── worker/             API: http helpers, D1 access layer and routes
 │   └── app/                React UI (pages, components, state, api client)
 ├── tests/                  algorithm unit tests (contract §32 cases 1-8)
 ├── tools/generate-icons.mjs
@@ -104,7 +107,7 @@ rebalancing after a manual rice edit. They also pin the calorie profile rules
 ### Browser / mobile acceptance
 
 `e2e/mobile-acceptance.mjs` drives the real UI in a 390x844 touch viewport and
-checks PIN setup, the home summary, automatic grams, locking and rebalancing, the
+checks the home summary, automatic grams, locking and rebalancing, the
 training/rest switch, the post-workout module, auto save plus refresh
 persistence, history and copy, food CRUD, settings and the PWA shell. It is kept
 out of `npm test` because it needs a browser and a throwaway local D1 — see the
@@ -112,8 +115,8 @@ header of the file for the exact commands.
 
 ## API
 
-All `/api/*` routes require an unlocked session except `/api/health` and the
-`/api/auth/*` endpoints.
+All `/api/*` routes are directly accessible because this is a single-user
+personal app. Keep the deployed URL private if the data should remain private.
 
 | Method | Path                       | Purpose                              |
 | ------ | -------------------------- | ------------------------------------ |
@@ -138,12 +141,10 @@ Worker validates the payload, recomputes `actual_*` from `foods x grams` so the
 stored totals always match the stored plan, and writes `daily_records` +
 `meal_items`.
 
-## Security notes
+## Data notes
 
-- The PIN is never stored: PBKDF2-SHA256, 210 000 iterations, random 16-byte salt.
-- Sessions are random 32-byte tokens stored only as SHA-256 hashes, delivered as
-  an HttpOnly / SameSite=Lax cookie, valid 30 days.
-- Eight wrong PINs lock the endpoint for 15 minutes.
+- There is no authentication or access control; anyone with the deployed URL can
+  access the same personal data.
 - Core data (weight, food library, daily plans, history, settings) only lives in
   D1. `localStorage` is not used for core data.
 
