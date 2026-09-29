@@ -35,6 +35,17 @@ class MonitorPaths:
     GRAFANA_CONFIG_FILE = SERVICES_DIR / "grafana" / "grafana.ini"
     GRAFANA_PROVISIONING_DIR = SERVICES_DIR / "grafana" / "provisioning"
     GRAFANA_DASHBOARDS_DIR = SERVICES_DIR / "grafana" / "dashboards"
+    #: Production Jsonnet sources shipped inside the installed package. The
+    #: runtime renders :data:`GRAFANA_JSONNET_ENTRYPOINT` at startup; the
+    #: committed JSON under :data:`GRAFANA_DASHBOARDS_DIR` is kept as the
+    #: semantic baseline/reference and is no longer the runtime source.
+    GRAFANA_JSONNET_DIR = SERVICES_DIR / "grafana" / "jsonnet"
+    GRAFANA_JSONNET_ENTRYPOINT = GRAFANA_JSONNET_DIR / "dashboards.jsonnet"
+    #: Grafana folder the rendered compositions are written into. The runtime
+    #: renders into the same folder the committed baseline has always used, so
+    #: the folder structure Grafana shows does not change.
+    GRAFANA_JSONNET_OUTPUT_SUBDIR = "verl"
+    GRAFANA_JSONNET_OUTPUT_DIR = GRAFANA_DASHBOARDS_DIR / GRAFANA_JSONNET_OUTPUT_SUBDIR
 
 
 class MonitorRayActor:
