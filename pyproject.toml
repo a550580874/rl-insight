@@ -73,7 +73,6 @@ rl_insight = [
   # Production Jsonnet sources the runtime renders at startup.
   "config/services/grafana/jsonnet/*.jsonnet",
   "config/services/grafana/jsonnet/*.libsonnet",
-  "config/services/grafana/jsonnet/dashboards/*.jsonnet",
   "config/services/grafana/jsonnet/dashboards/*.libsonnet",
 ]
 recipe = [
