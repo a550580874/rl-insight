@@ -927,7 +927,7 @@ def _prepare_grafana_dashboards(conf: DictConfig, runtime_dir: Path) -> Path:
 
     The runtime directory is rebuilt from scratch on every start, so a removed
     or renamed source file never leaves a stale copy behind. The base source is
-    then chosen by this precedence (see ``tools/grafana/README.md``):
+    then chosen by this precedence (see ``tools/grafana/framework/README.md``):
 
     1. a non-empty ``grafana.dashboard_config`` renders that Jsonnet config; a
        missing file or a Jsonnet error stops startup before Grafana runs;

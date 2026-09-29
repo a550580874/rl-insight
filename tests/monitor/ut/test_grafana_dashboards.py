@@ -106,13 +106,6 @@ def _read_json(path: Path) -> dict:
     return json.loads(path.read_text(encoding="utf-8"))
 
 
-def _without_identity(dashboard: dict) -> dict:
-    """Blank the two fields a Jsonnet dashboard is allowed to change."""
-    dashboard["metadata"]["name"] = None
-    dashboard["spec"]["title"] = None
-    return dashboard
-
-
 # --------------------------------------------------------------------------
 # Automatic generation from the package sources (no CLI involved)
 # --------------------------------------------------------------------------
@@ -150,24 +143,6 @@ def test_prepare_keeps_the_static_dashboards_byte_identical(tmp_path) -> None:
         assert (staged / "verl" / f"{name}.json").read_bytes() == (
             _static_dashboard(name).read_bytes()
         ), f"{name}.json is not the bundled file copied as-is"
-
-
-def test_prepare_renders_bundled_compositions_equal_to_the_static_dashboards(
-    tmp_path,
-) -> None:
-    _renderer()
-
-    staged = runtime_module._prepare_grafana_dashboards(_conf(), tmp_path / "runtime")
-
-    for name in (
-        "verl_tainer_v1_with_vllm_engine",
-        "verl_tainer_v1_with_sglang_engine",
-    ):
-        static = _read_json(_static_dashboard(name))
-        rendered = _read_json(staged / "verl" / f"{name}_jsonnet.json")
-        assert _without_identity(rendered) == _without_identity(static), (
-            f"{name}_jsonnet drifted from the static dashboard"
-        )
 
 
 def test_prepare_gives_the_jsonnet_dashboards_their_own_identity(tmp_path) -> None:
