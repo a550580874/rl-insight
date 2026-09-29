@@ -1,13 +1,13 @@
 // Lightweight structural verification for the semantic production modules
 // and the composition registry.
-local controller = import 'controller.libsonnet';
-local npu = import 'npu.libsonnet';
-local registry = import '../dashboard_compositions.libsonnet';
-local sglang = import 'sglang.libsonnet';
-local storage = import 'storage.libsonnet';
-local trainer = import 'trainer.libsonnet';
-local trajectory = import 'trajectory.libsonnet';
-local vllm = import 'vllm.libsonnet';
+local controller = import '../../../rl_insight/config/services/grafana/jsonnet/dashboards/controller.libsonnet';
+local npu = import '../../../rl_insight/config/services/grafana/jsonnet/dashboards/npu.libsonnet';
+local registry = import '../../../rl_insight/config/services/grafana/jsonnet/dashboard_compositions.libsonnet';
+local sglang = import '../../../rl_insight/config/services/grafana/jsonnet/dashboards/sglang.libsonnet';
+local storage = import '../../../rl_insight/config/services/grafana/jsonnet/dashboards/storage.libsonnet';
+local trainer = import '../../../rl_insight/config/services/grafana/jsonnet/dashboards/trainer.libsonnet';
+local trajectory = import '../../../rl_insight/config/services/grafana/jsonnet/dashboards/trajectory.libsonnet';
+local vllm = import '../../../rl_insight/config/services/grafana/jsonnet/dashboards/vllm.libsonnet';
 
 local sharedModules = [trainer, controller, storage, trajectory];
 local objectField(modules, field) =
