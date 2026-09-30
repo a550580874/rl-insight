@@ -4,4 +4,4 @@ artifacts/*.log
 artifacts/*.png
 __pycache__/
 .pytest_cache/
-
+.venv/

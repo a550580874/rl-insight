@@ -6,7 +6,7 @@ class RiskDecision(str, Enum):
     RISK_STOP = "RISK_STOP"
     HUMAN_REQUIRED = "HUMAN_REQUIRED"
 
-RISK_SIGNALS = {"captcha", "verification", "login_required", "risk_control", "too_frequent", "unexpected_screen"}
+RISK_SIGNALS = {"captcha", "verification", "login_required", "risk_control", "too_frequent", "unexpected_screen", "query_limit", "result_limit", "scroll_limit", "action_limit"}
 
 @dataclass
 class RiskGuard:
@@ -22,10 +22,13 @@ class RiskGuard:
     consecutive_failures: int = 0
     events: list[dict] = field(default_factory=list)
     stopped: RiskDecision | None = None
+    event_sink: callable | None = None
 
     def _stop(self, signal: str, detail: str = "") -> RiskDecision:
         decision = RiskDecision.HUMAN_REQUIRED if signal in {"captcha", "verification", "login_required"} else RiskDecision.RISK_STOP
         self.events.append({"signal": signal, "detail": detail, "decision": decision.value})
+        if self.event_sink:
+            self.event_sink(self.events[-1])
         self.stopped = decision
         return decision
 
@@ -52,9 +55,11 @@ class RiskGuard:
         self.actions += 1
         return True
 
+    def allow_launch(self) -> bool:
+        return self.allow_action()
+
     def record_results(self, count: int) -> bool:
         if self.stopped or self.results + count > self.max_results:
             self._stop("result_limit"); return False
         self.results += count
         return True
-

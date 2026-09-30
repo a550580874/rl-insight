@@ -19,18 +19,22 @@ class Store:
 
     def save_candidate(self, candidate: Candidate) -> bool:
         key, quality = candidate.identity(); stamp = now()
+        if key is None:
+            return False
         row = self.connection.execute("SELECT id FROM candidates WHERE identity_key=? AND query=?", (key, candidate.query)).fetchone()
         if row:
             self.connection.execute("UPDATE candidates SET last_seen_at=?,raw_json=?,visible_text=?,title=?,author=?,publish_text=?,description=? WHERE id=?", (stamp, json.dumps(candidate.raw, ensure_ascii=False), candidate.visible_text, candidate.title, candidate.author, candidate.publish_text, candidate.description, row["id"])); self.connection.commit(); return False
         self.connection.execute("INSERT INTO candidates(identity_key,identity_quality,query,source,title,author,publish_text,description,visible_text,first_seen_at,last_seen_at,raw_json) VALUES(?,?,?,?,?,?,?,?,?,?,?,?)", (key, quality, candidate.query, candidate.source, candidate.title, candidate.author, candidate.publish_text, candidate.description, candidate.visible_text, stamp, stamp, json.dumps(candidate.raw, ensure_ascii=False))); self.connection.commit(); return True
 
     def start_run(self, query: str) -> int:
-        self.connection.execute("INSERT INTO search_queries(query) VALUES(?) ON CONFLICT(query) DO NOTHING", (query,)); qid = self.connection.execute("SELECT id FROM search_queries WHERE query=?", (query,)).fetchone()["id"]
+        stamp = now()
+        self.connection.execute("INSERT INTO search_queries(query,last_run_at) VALUES(?,?) ON CONFLICT(query) DO UPDATE SET last_run_at=excluded.last_run_at", (query, stamp)); qid = self.connection.execute("SELECT id FROM search_queries WHERE query=?", (query,)).fetchone()["id"]
         cur = self.connection.execute("INSERT INTO search_runs(query_id,started_at,status) VALUES(?,?,?)", (qid, now(), "RUNNING")); self.connection.commit(); return cur.lastrowid
 
     def finish_run(self, run_id: int, status: str, new_count: int, seen_count: int, risk_status: str | None = None) -> None:
         self.connection.execute("UPDATE search_runs SET finished_at=?,status=?,new_count=?,seen_count=?,risk_status=? WHERE id=?", (now(), status, new_count, seen_count, risk_status, run_id)); self.connection.commit()
+        if status == "DONE":
+            self.connection.execute("UPDATE search_queries SET last_success_at=? WHERE id=(SELECT query_id FROM search_runs WHERE id=?)", (now(), run_id)); self.connection.commit()
 
     def record_risk(self, run_id: int | None, signal: str, detail: str, decision: str) -> None:
         self.connection.execute("INSERT INTO risk_events(run_id,created_at,signal,detail,decision) VALUES(?,?,?,?,?)", (run_id, now(), signal, detail, decision)); self.connection.commit()
-

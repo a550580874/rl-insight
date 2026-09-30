@@ -17,15 +17,20 @@ class Candidate:
     last_seen_at: str | None = None
     raw: dict[str, Any] = field(default_factory=dict)
 
-    def identity(self) -> tuple[str, str]:
+    def identity(self) -> tuple[str | None, str]:
         if self.aweme_id:
             return self.aweme_id, "aweme_id"
         if self.share_url:
             return self.share_url, "share_url"
         import hashlib
-        normalized = "|".join((self.title or "").strip().lower(), (self.author or "").strip().lower(), (self.publish_text or "").strip().lower())
+        fields = ((self.title or "").strip().lower(), (self.author or "").strip().lower(), (self.publish_text or "").strip().lower())
+        if not any(fields):
+            if not self.visible_text.strip():
+                return None, "UNIDENTIFIABLE"
+            normalized = "visible_text|" + self.visible_text.strip().lower()
+        else:
+            normalized = "|".join(fields)
         return hashlib.sha256(normalized.encode()).hexdigest(), "fingerprint"
 
     def as_dict(self) -> dict[str, Any]:
         return asdict(self)
-
