@@ -1,0 +1,11 @@
+[project]
+name = "douyin-earlybird-agent"
+version = "0.1.0"
+description = "Low-frequency, mobile-first Douyin search PoC"
+requires-python = ">=3.10"
+dependencies = []
+
+[tool.pytest.ini_options]
+pythonpath = ["src"]
+testpaths = ["tests"]
+
