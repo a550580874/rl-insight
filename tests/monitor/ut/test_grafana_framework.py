@@ -15,9 +15,8 @@
 """Tests for the generic Grafana dashboard composition framework.
 
 Every test renders a minimal toy composition it writes into ``tmp_path``, never
-a production dashboard, through the installed-package core
-(``rl_insight.grafana.renderer``). The optional CLI is only covered to prove it
-is a thin wrapper over that same core.
+a production dashboard, through ``rl_insight.grafana.renderer``. The optional CLI
+is covered only to prove it is a thin wrapper over that same core.
 """
 
 from __future__ import annotations
