@@ -14,20 +14,11 @@
 
 """Optional CLI over the installed-package Grafana dashboard renderer.
 
-This is a thin wrapper: evaluation, serialization and the ``--check``
-comparison all come from :mod:`rl_insight.grafana.renderer`. The wrapper adds
-only argument parsing and exit codes, so the CLI and any in-process caller
-render exactly the same bytes.
-
-Usage::
-
-    python tools/grafana/framework/generate.py --config <composition.jsonnet> \\
-        --out-dir <dir>
-    python tools/grafana/framework/generate.py --config <composition.jsonnet> \\
-        --check --expected-dir <dir>
-
-Exit codes: ``0`` success, ``1`` ``--check`` found stale files, ``2`` the
-config could not be rendered.
+Thin wrapper: evaluation, serialization and the ``--check`` comparison all come
+from :mod:`rl_insight.grafana.renderer`, so the CLI and any in-process caller
+render exactly the same bytes. See ``README.md`` for usage; exit codes are ``0``
+success, ``1`` stale files found by ``--check`` and ``2`` a config that could
+not be rendered.
 """
 
 from __future__ import annotations

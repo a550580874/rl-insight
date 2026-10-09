@@ -68,6 +68,10 @@ rl_insight = [
   "config/services/grafana/provisioning/dashboards/*.yml",
   "config/services/grafana/dashboards/*.json",
   "config/services/grafana/dashboards/*/*.json",
+  # Jsonnet mechanism sources the runtime renders at startup: the entrypoint,
+  # the composition registry and the generic framework assets.
+  "config/services/grafana/jsonnet/*.jsonnet",
+  "config/services/grafana/jsonnet/*.libsonnet",
   "config/services/grafana/jsonnet/framework/*.libsonnet",
 ]
 recipe = [

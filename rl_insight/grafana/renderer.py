@@ -74,8 +74,10 @@ def render_dashboards(config: Path) -> dict[str, Any]:
     """Evaluate ``config`` and return its ``{name: dashboard}`` mapping.
 
     Raises :class:`JsonnetRenderError` when the config is missing, fails to
-    evaluate, does not produce JSON, or does not produce a non-empty object of
-    dashboards.
+    evaluate, does not produce JSON, or does not produce an object of
+    dashboards. An empty object is valid: the registry ships empty, so a config
+    registering no composition renders zero dashboards and the runtime keeps
+    staging the bundled static dashboards.
     """
     config = Path(config)
     if not config.is_file():
@@ -90,10 +92,8 @@ def render_dashboards(config: Path) -> dict[str, Any]:
             f"Jsonnet evaluation of {config} did not produce JSON: {error}"
         ) from error
 
-    if not isinstance(dashboards, dict) or not dashboards:
-        raise JsonnetRenderError(
-            f"{config} must evaluate to a non-empty object of dashboards"
-        )
+    if not isinstance(dashboards, dict):
+        raise JsonnetRenderError(f"{config} must evaluate to an object of dashboards")
     return dashboards
 
 

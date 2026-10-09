@@ -1,375 +1,110 @@
-# README
+# Grafana dashboard framework
 
-# Grafana dashboard
+RL-Insight builds its Grafana dashboards from **Jsonnet** sources shipped inside
+the `rl_insight` package and materializes them when the service starts. Grafana
+keeps reading plain JSON, and nobody runs a generator or commits generated
+files.
 
-> **Chinese version: [README.zh-CN.md](README.zh-CN.md)**
+This change is the mechanism layer: the composition registry ships **empty**, so
+the runtime starts with no Jsonnet dashboard registered and simply stages the
+bundled static dashboards. The production compositions and business content are
+added by the change that depends on this one.
 
-RL-Insight Grafana Dashboards are configured and maintained with **Jsonnet**. Regular users do not need to change how they use RL-Insight. Dashboard developers mainly work with Jsonnet configuration files and modules. When the service starts, RL-Insight automatically generates the JSON required by Grafana, so there is no need to generate or commit JSON manually. The original static Dashboards are still kept and loaded alongside the Jsonnet-generated versions.
+## How it works
 
-## Overview
-
-![Grafana dashboard framework overview 1](images/overview-1.png)
-
-![Grafana dashboard framework overview 2](images/overview-2.png)
-
-
-
-## Usage Scenarios
-
-All of the following scenarios involve modifying the Jsonnet source files. After the changes are made, continue with the normal RL-Insight development/startup workflow. The Dashboard JSON is generated automatically when the service starts, so no manual generation step is required.
-
-### 1. Create a New Dashboard by Reusing Existing Modules
-
-If existing modules such as `trainer`, `trajectory`, and `npu` already contain the monitoring content you need, you do not need to create another `.libsonnet` file. You only need to add a new Dashboard entry under `compositions` in:
-
-```text
-dashboard_compositions.libsonnet
+```mermaid
+flowchart LR
+  E["dashboards.jsonnet<br/>(sole entrypoint)"] --> C["framework/composer.libsonnet"]
+  E --> R["dashboard_compositions.libsonnet<br/>(empty registry)"]
+  C --> V["framework/viz.libsonnet"]
+  C --> S["dashboards/*.libsonnet<br/>(content modules)"]
+  E -->|"rjsonnet, in process"| P["rl_insight.grafana.renderer"]
+  B["bundled static dashboards"] --> D["&lt;runtime_dir&gt;/dashboards/"]
+  P --> D
+  D --> G["Grafana provisioning<br/>(reads JSON only)"]
 ```
 
-For example:
+`rl-insight server start` rebuilds `<runtime_dir>/dashboards` from scratch: the
+bundled static dashboards are staged byte for byte, then
+`rl_insight.grafana.renderer` evaluates the entrypoint in process through the
+`rjsonnet` binding and writes one `<dashboard-name>.json` per registered
+composition. Rendering is additive — an existing file is never overwritten and a
+collision fails startup. The runtime never writes to the package sources, the
+config or the repository. Grafana provisioning keeps pointing at the runtime
+directory and never executes Jsonnet. No Jsonnet CLI, Go toolchain or compiler
+is required.
+
+### Source layout
+
+| Path | Purpose |
+| --- | --- |
+| `jsonnet/dashboards.jsonnet` | Sole entrypoint; composes every registered composition. Normally unchanged. |
+| `jsonnet/dashboard_compositions.libsonnet` | Composition registry; empty in this change. |
+| `jsonnet/dashboards/*.libsonnet` | Reusable content modules (`panels`, `rows`, `rowItems`, `variables`, `tags`). |
+| `jsonnet/framework/composer.libsonnet` | Ordered merge, conflict detection, late layout reference resolution. |
+| `jsonnet/framework/viz.libsonnet` | Shared visualization defaults and RFC 7396 viz patches. |
+| `rl_insight/grafana/renderer.py` | `render_dashboards`, `materialize_dashboards`, `stale_dashboards`. |
+| `tools/grafana/framework/generate.py` | Optional CLI wrapper over the same renderer (debug/CI only). |
+
+### Configuration precedence
+
+| `config.yaml` key | Effect |
+| --- | --- |
+| `grafana.dashboard_config` | Non-empty: render that Jsonnet config instead of the bundled entrypoint. A missing file or Jsonnet error stops startup before Grafana runs. |
+| `grafana.dashboards_dir` | Legacy static directory. When it is not the bundled default it is copied as-is and no Jsonnet runs. |
+| `grafana.extra_dashboard_dir` | Merged last, with recursive copy and filename-collision failure. |
+
+## Extending the framework
+
+Example only, not production content:
 
 ```jsonnet
-{
-  compositions: {
-    my_verl_dashboard: {
-      modules: [trainer, trajectory, npu],
-
-      dashboard: {
-        metadata: {
-          name: 'my-verl-dashboard',
-          labels: {},
-          annotations: {},
-        },
-
-        title: 'my_verl_dashboard',
-        tags: ['RL-Insight', 'verl'],
-
-        spec: productionSpec,
-
-        variableOrder: [
-          'datasource',
-          'project',
-          'experiment_name',
-          'npu_instance',
-        ],
-
-        rowOrder: [
-          'rl state timeline',
-          'training metric',
-        ],
-      },
-    },
-  },
-}
-```
-
-The newly added entry:
-
-```jsonnet
-my_verl_dashboard: {
-    ...
-}
-```
-
-defines a new Dashboard.
-
-The following configuration:
-
-```jsonnet
-modules: [trainer, trajectory, npu]
-```
-
-means that the Dashboard combines the content provided by these three modules:
-
-```text
-trainer
-    +
-trajectory
-    +
-npu
-    ↓
-my_verl_dashboard
-```
-
-### 2. Add a New Foo Engine or Another New Module
-
-If existing modules such as `trainer`, `vllm`, `sglang`, and `npu` do not contain the monitoring content you need, create a new `.libsonnet` module.
-
-First, add:
-
-```text
-foo.libsonnet
-```
-
-under:
-
-```text
-rl_insight/config/services/grafana/jsonnet/dashboards/
-```
-
-For example:
-
-```jsonnet
-{
-  panels: [
-    // Foo Engine panels
-  ],
-
-  rows: {
-    // Foo Engine rows
-  },
-
-  variables: {
-    // Variables used by Foo Engine
-  },
-}
-```
-
-Then import the module in:
-
-```text
-dashboard_compositions.libsonnet
-```
-
-```jsonnet
-local foo = import 'dashboards/foo.libsonnet';
-```
-
-Next, add a new Dashboard composition or update an existing one:
-
-```jsonnet
-verl_tainer_v1_with_foo_engine_jsonnet: {
-  modules: verlBase + [foo],
-
-  dashboard: {
-    metadata: {
-      name: 'foo-dashboard-id',
-      labels: {},
-      annotations: {},
-    },
-
-    title: 'verl_trainer_v1_with_foo_engine_jsonnet',
-
-    tags: [
-      'RL-Insight',
-      'verl',
-      'foo',
-    ],
-
-    spec: productionSpec,
-
-    variableOrder: [
-      'datasource',
-      'project',
-      'experiment_name',
-    ],
-
-    rowOrder: [
-      'rl state timeline',
-      'training metric',
-      'foo engine metric',
-    ],
-  },
-},
-```
-
-Here:
-
-```jsonnet
-modules: verlBase + [foo]
-```
-
-means:
-
-```text
-trainer
-+ controller
-+ storage
-+ trajectory
-+ foo
-↓
-Foo Engine Dashboard
-```
-
-In other words, the Dashboard reuses the existing VERL base modules and then adds the new `foo` module.
-
----
-
-### 3. Add New Monitoring Content to an Existing Dashboard
-
-If you only want to add panels or rows to an existing Dashboard, you can create an extension module instead of modifying the original `trainer.libsonnet`, `vllm.libsonnet`, or other existing module directly.
-
-For example, add:
-
-```text
-dashboards/trainer_extra.libsonnet
-```
-
-with:
-
-```jsonnet
+// jsonnet/dashboards/foo.libsonnet: plain data, no behaviour
 {
   panels: [{
-    key: 'training_extra.custom',
-    outputKey: 'panel-training-extra-custom',
-    id: 500,
-    title: 'Custom training metric',
-    queries: [{
-      expr: 'custom_training_metric',
-    }],
+    key: 'foo.panel', outputKey: 'panel-foo', id: 900, title: 'Foo metric',
+    queries: [{ expr: 'foo_metric' }],
   }],
-
-  rows: {
-    'training extra metric': {
-      kind: 'RowsLayoutRow',
-
-      spec: {
-        title: 'training extra metric',
-        collapse: false,
-
-        layout: {
-          kind: 'GridLayout',
-
-          spec: {
-            items: [{
-              kind: 'GridLayoutItem',
-
-              spec: {
-                x: 0,
-                y: 0,
-                width: 24,
-                height: 8,
-
-                element: {
-                  kind: 'ElementReference',
-                  name: 'training_extra.custom',
-                },
-              },
-            }],
-          },
-        },
-      },
-    },
-  },
+  rows: { 'foo row': { kind: 'RowsLayoutRow', spec: { title: 'foo row',
+    collapse: false, layout: { kind: 'GridLayout', spec: { items: [{
+      kind: 'GridLayoutItem', spec: { x: 0, y: 0, width: 24, height: 8,
+        element: { kind: 'ElementReference', name: 'foo.panel' } } }] } } } } },
+  variables: { foo_instance: { kind: 'ConstantVariable', spec: {
+    name: 'foo_instance', label: 'Instance', value: 'i0', hide: 'dontHide' } } },
 }
 ```
 
-Then import it in:
-
-```text
-dashboard_compositions.libsonnet
-```
-
 ```jsonnet
-local trainer_extra =
-  import 'dashboards/trainer_extra.libsonnet';
+// jsonnet/dashboard_compositions.libsonnet: specialize the empty registry
+local foo = import 'dashboards/foo.libsonnet';
+
+{ compositions: { foo_dashboard: {
+  modules: [foo],
+  dashboard: {
+    metadata: { name: 'foo-dashboard-id', labels: {}, annotations: {} },
+    title: 'foo_dashboard', tags: ['RL-Insight', 'foo'], spec: {},
+    variableOrder: ['foo_instance'], rowOrder: ['foo row'],
+  },
+} } }
 ```
 
-Add the module to the existing Dashboard:
+`rowItems` lets a module append panels to a row another module owns; see
+`composer.libsonnet` for the full module schema and composition rules.
 
-```jsonnet
-modules: verlBase + [trainer_extra, vllm, npu],
+## Optional CLI
+
+`tools/grafana/framework/generate.py` renders through the same core for local
+debugging and CI. The server never calls it:
+
+```bash
+python tools/grafana/framework/generate.py --config <config.jsonnet> --out-dir <dir>
+python tools/grafana/framework/generate.py --config <config.jsonnet> --check --expected-dir <dir>
 ```
 
-If `trainer_extra` adds a new row, also add that row to:
+Exit codes: `0` success, `1` stale files found by `--check`, `2` rendering
+failed.
 
-```text
-rowOrder
-```
+## Tests
 
-For example:
-
-```jsonnet
-rowOrder: [
-  'rl state timeline',
-  'training metric',
-  'vllm engine metric',
-  'transfer queue metric',
-  'hardware metric',
-  'training extra metric',
-],
-```
-
-The generated Dashboard will then include the monitoring content defined in `trainer_extra`.
-
-If you only need to add a panel to an existing row, you can use `rowItems` instead of creating a new row.
-
----
-
-### 4. Modify the Framework
-
-For normal Dashboard additions or updates, you usually only need to modify:
-
-```text
-dashboards/*.libsonnet
-```
-
-and:
-
-```text
-dashboard_compositions.libsonnet
-```
-
-Only modify the shared framework when you need to change generic capabilities:
-
-```text
-framework/
-```
-
-The framework currently contains:
-
-```text
-framework/
-├── composer.libsonnet
-└── viz.libsonnet
-```
-
-#### 4.1 Modify Shared Visualization Defaults
-
-If you need to add or adjust Grafana visualization defaults that can be reused by all Dashboards, modify:
-
-```text
-framework/viz.libsonnet
-```
-
-For example, this is where shared visualization templates such as the following are defined:
-
-```text
-timeseries
-stat
-heatmap
-bargauge
-```
-
-#### 4.2 Modify Dashboard Composition Rules
-
-If you need to change how modules are combined, for example by adding a new generic composition behavior, modify:
-
-```text
-framework/composer.libsonnet
-```
-
-It combines the following module content into the final Dashboard:
-
-```text
-panels
-rows
-variables
-rowItems
-```
-
-In general:
-
-```text
-Add a panel / metric / row / variable
-→ modify dashboards/*.libsonnet
-
-Add or adjust a Dashboard composition
-→ modify dashboard_compositions.libsonnet
-
-Add shared visualization capabilities
-→ modify framework/viz.libsonnet
-
-Modify generic composition rules
-→ modify framework/composer.libsonnet
-```
+`test_grafana_framework.py` and `test_grafana_dashboards.py` under
+`tests/monitor/ut/` cover the composer, renderer, CLI and startup preparation.
