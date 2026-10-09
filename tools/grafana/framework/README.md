@@ -8,9 +8,9 @@ RL-Insight Grafana Dashboards are configured and maintained with **Jsonnet**. Re
 
 ## Overview
 
-![ChatGPT 图像 2026年9月30日 17_40_22](/Users/ming-shen/Downloads/ChatGPT 图像 2026年9月30日 17_40_22.png)
+![Grafana dashboard framework overview 1](images/overview-1.png)
 
-![ChatGPT 图像 2026年9月30日 17_40_32](/Users/ming-shen/Downloads/ChatGPT 图像 2026年9月30日 17_40_32.png)
+![Grafana dashboard framework overview 2](images/overview-2.png)
 
 
 

@@ -9,9 +9,9 @@ RL-Insight 的 Grafana Dashboard 使用 **Jsonnet** 进行配置和维护。普�
 
 ## 概览
 
-![image.png](READEME/image.png)
+![Grafana Dashboard 框架概览图 1](images/overview-1.zh-CN.png)
 
-![image.png](READEME/image%201.png)
+![Grafana Dashboard 框架概览图 2](images/overview-2.zh-CN.png)
 
 ## 使用场景
 
