@@ -24,7 +24,7 @@ their business tests live in the change that depends on this one.
 from __future__ import annotations
 
 import json
-import os
+import shutil
 from pathlib import Path
 
 import pytest
@@ -66,13 +66,17 @@ def _renderer():
 
 
 def _write_custom_config(directory: Path, name: str = "custom_board") -> Path:
-    """Write a user composition config that imports the packaged framework."""
-    composer = os.path.relpath(
-        JSONNET_DIR / "framework" / "composer.libsonnet", directory
-    )
+    """Write a user composition config next to a copy of the framework assets.
+
+    The assets are copied instead of addressed by a relative path because the
+    checkout and the temporary directory can be on different Windows drives,
+    where ``os.path.relpath`` raises.
+    """
+    for asset in ("composer.libsonnet", "viz.libsonnet"):
+        shutil.copy(JSONNET_DIR / "framework" / asset, directory / asset)
     config = directory / "custom.jsonnet"
     config.write_text(
-        f"local composer = import '{composer}';\n"
+        "local composer = import 'composer.libsonnet';\n"
         f"{{ {name}: composer.compose([{{\n"
         "  panels: [{ key: 'toy.panel', outputKey: 'toy-panel', id: 1,\n"
         "             title: 'Toy panel', queries: [{ expr: 'toy_metric' }] }],\n"
@@ -439,14 +443,14 @@ def test_legacy_dashboards_dir_skips_the_production_compositions(tmp_path) -> No
 
 def test_custom_config_can_reuse_a_production_module(tmp_path) -> None:
     _renderer()
-    composer = os.path.relpath(
-        JSONNET_DIR / "framework" / "composer.libsonnet", tmp_path
-    )
-    npu = os.path.relpath(JSONNET_DIR / "dashboards" / "npu.libsonnet", tmp_path)
+    # Copied for the same cross-drive reason as _write_custom_config.
+    for asset in ("composer.libsonnet", "viz.libsonnet"):
+        shutil.copy(JSONNET_DIR / "framework" / asset, tmp_path / asset)
+    shutil.copy(JSONNET_DIR / "dashboards" / "npu.libsonnet", tmp_path)
     config = tmp_path / "custom.jsonnet"
     config.write_text(
-        f"local composer = import '{composer}';\n"
-        f"local npu = import '{npu}';\n"
+        "local composer = import 'composer.libsonnet';\n"
+        "local npu = import 'npu.libsonnet';\n"
         "{ composed: composer.compose([npu], {\n"
         "  metadata: { name: 'npu-only', labels: {}, annotations: {} },\n"
         "  title: 'npu_only', tags: ['RL-Insight'], spec: {},\n"
