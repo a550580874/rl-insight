@@ -1,8 +1,8 @@
-# READEME
+# Grafana dashboard development
 
 # Grafana dashboard
 
-> **英文版本：[README.md](https://app.notion.com/p/README.md)**
+> **英文版本：[README.md](README.md)**
 > 
 
 RL-Insight 的 Grafana Dashboard 使用 **Jsonnet** 进行配置和维护。普通用户无需改变使用方式；Dashboard 开发者主要修改 Jsonnet 配置和模块，服务启动时会自动生成 Grafana 所需的 JSON，不需要手动生成或提交 JSON。原有静态 Dashboard 仍然保留，并与 Jsonnet 版本同时加载。
