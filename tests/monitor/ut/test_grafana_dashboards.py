@@ -24,7 +24,7 @@ their business tests live in the change that depends on this one.
 from __future__ import annotations
 
 import json
-import os
+import shutil
 from pathlib import Path
 
 import pytest
@@ -66,13 +66,17 @@ def _renderer():
 
 
 def _write_custom_config(directory: Path, name: str = "custom_board") -> Path:
-    """Write a user composition config that imports the packaged framework."""
-    composer = os.path.relpath(
-        JSONNET_DIR / "framework" / "composer.libsonnet", directory
-    )
+    """Write a user composition config next to a copy of the framework assets.
+
+    The assets are copied instead of addressed by a relative path because the
+    checkout and the temporary directory can be on different Windows drives,
+    where ``os.path.relpath`` raises.
+    """
+    for asset in ("composer.libsonnet", "viz.libsonnet"):
+        shutil.copy(JSONNET_DIR / "framework" / asset, directory / asset)
     config = directory / "custom.jsonnet"
     config.write_text(
-        f"local composer = import '{composer}';\n"
+        "local composer = import 'composer.libsonnet';\n"
         f"{{ {name}: composer.compose([{{\n"
         "  panels: [{ key: 'toy.panel', outputKey: 'toy-panel', id: 1,\n"
         "             title: 'Toy panel', queries: [{ expr: 'toy_metric' }] }],\n"

@@ -6,9 +6,8 @@ keeps reading plain JSON, and nobody runs a generator or commits generated
 files.
 
 This change is the mechanism layer: the composition registry ships **empty**, so
-the runtime starts with no Jsonnet dashboard registered and simply stages the
-bundled static dashboards. The production compositions and business content are
-added by the change that depends on this one.
+the runtime stages the bundled static dashboards and registers no Jsonnet one.
+The production compositions come with the change that depends on this one.
 
 ## How it works
 
@@ -30,9 +29,8 @@ bundled static dashboards are staged byte for byte, then
 `rjsonnet` binding and writes one `<dashboard-name>.json` per registered
 composition. Rendering is additive — an existing file is never overwritten and a
 collision fails startup. The runtime never writes to the package sources, the
-config or the repository. Grafana provisioning keeps pointing at the runtime
-directory and never executes Jsonnet. No Jsonnet CLI, Go toolchain or compiler
-is required.
+config or the repository, Grafana provisioning keeps reading plain JSON from the
+runtime directory, and no Jsonnet CLI, Go toolchain or compiler is required.
 
 ### Source layout
 
@@ -54,9 +52,7 @@ is required.
 | `grafana.dashboards_dir` | Legacy static directory. When it is not the bundled default it is copied as-is and no Jsonnet runs. |
 | `grafana.extra_dashboard_dir` | Merged last, with recursive copy and filename-collision failure. |
 
-## Extending the framework
-
-Example only, not production content:
+## Extending the framework (example only)
 
 ```jsonnet
 // jsonnet/dashboards/foo.libsonnet: plain data, no behaviour
@@ -106,5 +102,4 @@ failed.
 
 ## Tests
 
-`test_grafana_framework.py` and `test_grafana_dashboards.py` under
-`tests/monitor/ut/` cover the composer, renderer, CLI and startup preparation.
+`tests/monitor/ut/` covers the composer, renderer, CLI and startup preparation.
