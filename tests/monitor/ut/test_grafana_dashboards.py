@@ -313,3 +313,177 @@ def test_prepare_keeps_collision_detection_against_staged_dashboards(
 
     with pytest.raises(RuntimeError, match="already exists in runtime dashboards"):
         runtime_module._prepare_grafana_dashboards(conf, tmp_path / "runtime")
+
+
+# --------------------------------------------------------------------------
+# Production VERL compositions
+# --------------------------------------------------------------------------
+
+STATIC_NAMES = (
+    "verl_tainer_v1_with_vllm_engine",
+    "verl_tainer_v1_with_sglang_engine",
+)
+COMPOSITION_NAMES = (
+    "verl_tainer_v1_with_vllm_engine_jsonnet",
+    "verl_tainer_v1_with_sglang_engine_jsonnet",
+)
+PRODUCTION_SOURCE_FILES = (
+    MonitorPaths.GRAFANA_JSONNET_ENTRYPOINT,
+    JSONNET_DIR / "dashboard_compositions.libsonnet",
+    JSONNET_DIR / "compositions" / "verl_vllm.libsonnet",
+    JSONNET_DIR / "compositions" / "verl_sglang.libsonnet",
+    JSONNET_DIR / "dashboards" / "trainer.libsonnet",
+    JSONNET_DIR / "dashboards" / "vllm.libsonnet",
+    MonitorPaths.CONFIG_FILE,
+)
+
+
+def _normalized(dashboard: dict) -> dict:
+    """Strip the identity the two dashboards intentionally do not share."""
+    normalized = json.loads(json.dumps(dashboard))
+    normalized["metadata"]["name"] = "identity"
+    normalized["spec"]["title"] = "identity"
+    return normalized
+
+
+def _staged(tmp_path) -> Path:
+    return runtime_module._prepare_grafana_dashboards(_conf(), tmp_path / "runtime")
+
+
+def test_registry_defines_the_two_verl_compositions() -> None:
+    renderer = _renderer()
+
+    rendered = renderer.render_dashboards(MonitorPaths.GRAFANA_JSONNET_ENTRYPOINT)
+
+    assert tuple(sorted(rendered)) == tuple(sorted(COMPOSITION_NAMES))
+
+
+def test_prepare_materializes_four_verl_dashboards_without_any_cli(tmp_path) -> None:
+    _renderer()
+
+    folder = _staged(tmp_path) / MonitorPaths.GRAFANA_JSONNET_OUTPUT_SUBDIR
+
+    assert sorted(path.name for path in folder.glob("*.json")) == sorted(
+        f"{name}.json" for name in STATIC_NAMES + COMPOSITION_NAMES
+    )
+
+
+def test_jsonnet_dashboards_keep_their_own_identity(tmp_path) -> None:
+    _renderer()
+    staged = _staged(tmp_path)
+
+    for composition, static in zip(COMPOSITION_NAMES, STATIC_NAMES):
+        static_dashboard = _read_json(JSONNET_OUTPUT_DIR / f"{static}.json")
+        jsonnet_dashboard = _read_json(staged / "verl" / f"{composition}.json")
+        assert (
+            jsonnet_dashboard["metadata"]["name"]
+            != static_dashboard["metadata"]["name"]
+        )
+        assert (
+            jsonnet_dashboard["spec"]["title"]
+            == f"{static_dashboard['spec']['title']}_jsonnet"
+        )
+
+
+def test_jsonnet_and_static_dashboards_are_semantically_equivalent(tmp_path) -> None:
+    _renderer()
+    staged = _staged(tmp_path)
+
+    for composition, static in zip(COMPOSITION_NAMES, STATIC_NAMES):
+        jsonnet_dashboard = _read_json(staged / "verl" / f"{composition}.json")
+        static_dashboard = _read_json(JSONNET_OUTPUT_DIR / f"{static}.json")
+        assert _normalized(jsonnet_dashboard) == _normalized(static_dashboard)
+
+
+def test_sglang_composition_never_includes_the_npu_content(tmp_path) -> None:
+    _renderer()
+    staged = _staged(tmp_path)
+
+    vllm = _read_json(staged / "verl" / f"{COMPOSITION_NAMES[0]}.json")
+    sglang = _read_json(staged / "verl" / f"{COMPOSITION_NAMES[1]}.json")
+    variables = lambda dashboard: [  # noqa: E731
+        variable["spec"]["name"] for variable in dashboard["spec"]["variables"]
+    ]
+    rows = lambda dashboard: [  # noqa: E731
+        row["spec"]["title"] for row in dashboard["spec"]["layout"]["spec"]["rows"]
+    ]
+
+    assert "npu_instance" in variables(vllm)
+    assert "npu_instance" not in variables(sglang)
+    assert "hardware metric" in rows(vllm)
+    assert "hardware metric" not in rows(sglang)
+
+
+def test_prepare_never_writes_to_production_sources(tmp_path) -> None:
+    _renderer()
+    before = {path: path.read_bytes() for path in PRODUCTION_SOURCE_FILES}
+
+    _staged(tmp_path)
+
+    assert {path: path.read_bytes() for path in PRODUCTION_SOURCE_FILES} == before
+
+
+def test_legacy_dashboards_dir_skips_the_production_compositions(tmp_path) -> None:
+    _renderer()
+    legacy = tmp_path / "legacy"
+    (legacy / "board").mkdir(parents=True)
+    (legacy / "board" / "board.json").write_text("{}", encoding="utf-8")
+
+    staged = runtime_module._prepare_grafana_dashboards(
+        _conf(legacy), tmp_path / "runtime"
+    )
+
+    assert (staged / "board" / "board.json").is_file()
+    assert not (staged / "verl").exists()
+
+
+def test_custom_config_can_reuse_a_production_module(tmp_path) -> None:
+    _renderer()
+    composer = os.path.relpath(
+        JSONNET_DIR / "framework" / "composer.libsonnet", tmp_path
+    )
+    npu = os.path.relpath(JSONNET_DIR / "dashboards" / "npu.libsonnet", tmp_path)
+    config = tmp_path / "custom.jsonnet"
+    config.write_text(
+        f"local composer = import '{composer}';\n"
+        f"local npu = import '{npu}';\n"
+        "{ composed: composer.compose([npu], {\n"
+        "  metadata: { name: 'npu-only', labels: {}, annotations: {} },\n"
+        "  title: 'npu_only', tags: ['RL-Insight'], spec: {},\n"
+        "  variableOrder: ['npu_instance'], rowOrder: [],\n"
+        "}) }\n",
+        encoding="utf-8",
+    )
+
+    staged = runtime_module._prepare_grafana_dashboards(
+        _conf(dashboard_config=str(config)), tmp_path / "runtime"
+    )
+
+    assert _read_json(staged / "verl" / "composed.json")["spec"]["title"] == "npu_only"
+    assert (staged / "verl" / f"{STATIC_NAMES[0]}.json").is_file()
+
+
+def test_extra_collision_against_a_generated_jsonnet_dashboard(tmp_path) -> None:
+    _renderer()
+    extra = tmp_path / "extra"
+    (extra / "verl").mkdir(parents=True)
+    (extra / "verl" / f"{COMPOSITION_NAMES[0]}.json").write_text("{}", encoding="utf-8")
+
+    with pytest.raises(RuntimeError, match="already exists in runtime dashboards"):
+        runtime_module._prepare_grafana_dashboards(
+            _conf(extra=extra), tmp_path / "runtime"
+        )
+
+
+def test_generated_and_extra_dashboards_coexist(tmp_path) -> None:
+    _renderer()
+    extra = tmp_path / "extra"
+    (extra / "custom").mkdir(parents=True)
+    (extra / "custom" / "router.json").write_text("{}", encoding="utf-8")
+
+    staged = runtime_module._prepare_grafana_dashboards(
+        _conf(extra=extra), tmp_path / "runtime"
+    )
+
+    assert (staged / "custom" / "router.json").is_file()
+    assert (staged / "verl" / f"{COMPOSITION_NAMES[0]}.json").is_file()

@@ -73,6 +73,9 @@ rl_insight = [
   "config/services/grafana/jsonnet/*.jsonnet",
   "config/services/grafana/jsonnet/*.libsonnet",
   "config/services/grafana/jsonnet/framework/*.libsonnet",
+  # Production Jsonnet content modules and the VERL compositions built from them.
+  "config/services/grafana/jsonnet/dashboards/*.libsonnet",
+  "config/services/grafana/jsonnet/compositions/*.libsonnet",
 ]
 recipe = [
   "config/*.yaml",

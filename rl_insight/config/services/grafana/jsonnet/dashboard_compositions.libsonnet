@@ -1,16 +1,16 @@
-// The composition registry consumed by `dashboards.jsonnet`.
+// The production composition registry consumed by `dashboards.jsonnet`.
 //
-// The generic mechanism ships this file empty: nothing here knows about any
-// concrete dashboard, so this change can be merged and started on its own while
-// the runtime keeps staging the bundled static JSON dashboards.
-//
-// A dependent change that adds real content specializes this registry:
-//
-//   local myDashboard = import 'compositions/my_dashboard.libsonnet';
-//   { compositions: { my_dashboard: myDashboard } }
-//
-// Each entry provides `modules` (the ordered modules to compose) and `dashboard`
-// (metadata, title, tags, chrome `spec`, `variableOrder`, `rowOrder`).
+// Each entry is one dashboard: the ordered `modules` to compose plus the
+// dashboard-level config (metadata, title, tags, chrome `spec`, `variableOrder`,
+// `rowOrder`). The two VERL compositions live in `compositions/`, so adding a
+// dashboard means adding one composition module and one entry here — the
+// entrypoint itself never changes.
+local verlVllm = import 'compositions/verl_vllm.libsonnet';
+local verlSglang = import 'compositions/verl_sglang.libsonnet';
+
 {
-  compositions: {},
+  compositions: {
+    verl_tainer_v1_with_vllm_engine_jsonnet: verlVllm,
+    verl_tainer_v1_with_sglang_engine_jsonnet: verlSglang,
+  },
 }
