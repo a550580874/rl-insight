@@ -1020,7 +1020,7 @@ def _materialize_dashboards(config: Path, target: Path) -> None:
     instead of starting Grafana with an empty or partial dashboard set.
     """
     if not config.is_file():
-        raise RuntimeError(f"Grafana dashboard config {str(config)!r} does not exist.")
+        raise RuntimeError(f"Grafana dashboard config '{config}' does not exist.")
     try:
         materialize_dashboards(config, target, overwrite=False)
     except JsonnetRenderError as error:
