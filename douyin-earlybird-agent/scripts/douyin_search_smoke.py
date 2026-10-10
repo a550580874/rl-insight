@@ -56,14 +56,15 @@ def main() -> int:
         if first.get("status") == "DONE" and first.get("candidates"):
             local_results = [not store.save_candidate(Candidate(**candidate)) for candidate in first["candidates"]]
             local_dedup_test = {"status": "PASS" if all(local_results) else "FAIL", "existing_candidate_recognized": all(local_results), "candidate_count": len(local_results)}
-        first["live_query_count"] = 1
+        live_query_count = int(adapter.search_submitted)
+        first["live_query_count"] = live_query_count
         first["real_candidates_extracted"] = first.get("seen_count", 0)
         first["database_insert_count"] = first.get("new_count", 0)
         first["local_dedup_test"] = local_dedup_test
         write_json(artifacts / "search_result_ui_tree.json", sanitize_tree(adapter.last_result_tree))
         write_json(artifacts / "search_run.json", first); write_json(artifacts / "search_result.json", first)
         write_json(artifacts / "risk_events.json", guard.events)
-        summary = {"status": "PASS" if first.get("status") == "DONE" and first.get("new_count", 0) >= 1 and local_dedup_test["status"] == "PASS" else "PARTIAL_PASS", "live_query_count": 1, "real_candidates_extracted": first.get("seen_count", 0), "database_insert_count": first.get("new_count", 0), "local_dedup_test": local_dedup_test, "first_run": first, "device_status": device_status}
+        summary = {"status": "PASS" if first.get("status") == "DONE" and first.get("new_count", 0) >= 1 and local_dedup_test["status"] == "PASS" else "PARTIAL_PASS", "live_query_count": live_query_count, "real_candidates_extracted": first.get("seen_count", 0), "database_insert_count": first.get("new_count", 0), "local_dedup_test": local_dedup_test, "first_run": first, "device_status": device_status}
     except Exception as exc:
         status = guard.stopped.value if guard.stopped else "BLOCKED_RUNTIME"
         error = {"status": status, "error_type": type(exc).__name__, "error": str(exc), "attempts": 1, "live_query_count": int(getattr(adapter, "search_submitted", False)), "real_candidates_extracted": 0, "database_insert_count": 0, "local_dedup_test": {"status": "NOT_RUN"}, "device_status": device_status}
