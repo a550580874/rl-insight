@@ -11,17 +11,8 @@ The production compositions come with the change that depends on this one.
 
 ## How it works
 
-```mermaid
-flowchart LR
-  E["dashboards.jsonnet<br/>(sole entrypoint)"] --> C["framework/composer.libsonnet"]
-  E --> R["dashboard_compositions.libsonnet<br/>(empty registry)"]
-  C --> V["framework/viz.libsonnet"]
-  C --> S["dashboards/*.libsonnet<br/>(content modules)"]
-  E -->|"rjsonnet, in process"| P["rl_insight.grafana.renderer"]
-  B["bundled static dashboards"] --> D["&lt;runtime_dir&gt;/dashboards/"]
-  P --> D
-  D --> G["Grafana provisioning<br/>(reads JSON only)"]
-```
+![Jsonnet dashboard file architecture](diagrams/jsonnet-files.svg)
+![RL-Insight dashboard startup flow](diagrams/server-start.svg)
 
 `rl-insight server start` rebuilds `<runtime_dir>/dashboards` from scratch: the
 bundled static dashboards are staged byte for byte, then
