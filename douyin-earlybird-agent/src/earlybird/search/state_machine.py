@@ -25,6 +25,6 @@ class SearchRunner:
             if not self.guard.record_results(len(candidates)):
                 status = self.guard.stopped.value; states.append(status); self.store.finish_run(run_id, status, 0, len(candidates), status); return {"status": status, "query": query, "states": states}
             if scroll and self.guard.allow_scroll(): states.append(State.OPTIONAL_SCROLL.value); self.adapter.scroll_results()
-            states += [State.STORE.value, State.DONE.value]; new = sum(self.store.save_candidate(c) for c in candidates); self.store.finish_run(run_id, "DONE", new, len(candidates)); return {"status":"DONE","query":query,"states":states,"new_count":new,"seen_count":len(candidates)}
+            states += [State.STORE.value, State.DONE.value]; new = sum(self.store.save_candidate(c) for c in candidates); self.store.finish_run(run_id, "DONE", new, len(candidates)); return {"status":"DONE","query":query,"states":states,"new_count":new,"seen_count":len(candidates),"candidates":[c.as_dict() for c in candidates]}
         except Exception as exc:
             decision = self.guard.stopped or RiskDecision.RISK_STOP; states.append(decision.value); self.store.finish_run(run_id, decision.value, 0, len(candidates), decision.value); return {"status":decision.value,"query":query,"states":states,"error":str(exc)}
