@@ -25,6 +25,13 @@ def health(endpoint: str) -> bool:
 def write_json(path: Path, value) -> None:
     path.write_text(json.dumps(value, ensure_ascii=False, indent=2), encoding="utf-8")
 
+def sanitize_tree(node):
+    if not isinstance(node, dict): return None
+    allowed = ("type", "label", "name", "value", "placeholderValue", "rect", "children")
+    result = {key: node[key] for key in allowed if key in node and key != "children"}
+    result["children"] = [clean for child in node.get("children", []) if (clean := sanitize_tree(child)) is not None]
+    return result
+
 def main() -> int:
     root = Path(__file__).parents[1]; artifacts = root / "artifacts"; artifacts.mkdir(exist_ok=True)
     endpoint = os.environ.get("DEVICEKIT_RPC_URL", "http://127.0.0.1:12004/rpc")
@@ -53,12 +60,15 @@ def main() -> int:
         first["real_candidates_extracted"] = first.get("seen_count", 0)
         first["database_insert_count"] = first.get("new_count", 0)
         first["local_dedup_test"] = local_dedup_test
+        write_json(artifacts / "search_result_ui_tree.json", sanitize_tree(adapter.last_result_tree))
         write_json(artifacts / "search_run.json", first); write_json(artifacts / "search_result.json", first)
         write_json(artifacts / "risk_events.json", guard.events)
         summary = {"status": "PASS" if first.get("status") == "DONE" and first.get("new_count", 0) >= 1 and local_dedup_test["status"] == "PASS" else "PARTIAL_PASS", "live_query_count": 1, "real_candidates_extracted": first.get("seen_count", 0), "database_insert_count": first.get("new_count", 0), "local_dedup_test": local_dedup_test, "first_run": first, "device_status": device_status}
     except Exception as exc:
-        error = {"status": "BLOCKED_APP_LAUNCH", "error": str(exc), "attempts": 1, "device_status": device_status}
+        status = guard.stopped.value if guard.stopped else "BLOCKED_RUNTIME"
+        error = {"status": status, "error_type": type(exc).__name__, "error": str(exc), "attempts": 1, "live_query_count": int(getattr(adapter, "search_submitted", False)), "real_candidates_extracted": 0, "database_insert_count": 0, "local_dedup_test": {"status": "NOT_RUN"}, "device_status": device_status}
         (artifacts / "runner_launch_after_trust.txt").write_text(str(exc) + "\n", encoding="utf-8")
+        if adapter.last_result_tree is not None: write_json(artifacts / "search_result_ui_tree.json", sanitize_tree(adapter.last_result_tree))
         write_json(artifacts / "search_run.json", error); write_json(artifacts / "search_result.json", error); write_json(artifacts / "risk_events.json", guard.events)
         summary = error
     write_json(artifacts / "acceptance_summary.json", summary); print(summary["status"]); return 0 if summary["status"] == "PASS" else 1

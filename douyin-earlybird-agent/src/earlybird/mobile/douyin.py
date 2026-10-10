@@ -6,6 +6,12 @@ from ..search.models import Candidate
 SECURITY_TEXT = ("验证码", "安全验证", "登录失效", "账号异常", "访问频繁", "操作频繁")
 NAV_TEXT = {"首页", "朋友", "消息", "我", "推荐", "关注", "搜索", "取消"}
 
+class CandidateParseError(ValueError):
+    """The visible tree cannot prove that a result page was loaded."""
+
+class RiskGuardStop(RuntimeError):
+    """Stops interaction immediately after a risk signal is detected."""
+
 def _children(node: Any) -> list[dict]:
     return node.get("children") or [] if isinstance(node, dict) else []
 
@@ -51,17 +57,22 @@ def detect_security_page(tree: Any) -> str | None:
 def _candidate_nodes(tree: dict) -> list[dict]:
     containers = [n for n in walk_tree(tree) if n.get("type") in {"XCUIElementTypeScrollView", "XCUIElementTypeCollectionView", "XCUIElementTypeTable"}]
     for container in containers:
-        children = [n for n in _children(container) if node_text(n)]
+        children = [n for n in _children(container) if any(node_text(descendant) for descendant in walk_tree(n))]
         if children: return children
-    return [n for n in _children(tree) if node_text(n)]
+    return [n for n in _children(tree) if any(node_text(descendant) for descendant in walk_tree(n))]
 
 class DouyinMobileAdapter:
     BUNDLE_ID = "com.ss.iphone.ugc.Aweme"
-    def __init__(self, client, guard: RiskGuard): self.client, self.guard = client, guard
+    def __init__(self, client, guard: RiskGuard):
+        self.client, self.guard = client, guard
+        self.last_result_tree: Any = None
+        self.search_submitted = False
 
     def _check_security(self, tree: Any) -> None:
         signal = detect_security_page(tree)
-        if signal: self.guard.report("verification" if "验证" in signal else "risk_control", signal)
+        if signal:
+            self.guard.report("verification" if "验证" in signal else "risk_control", signal)
+            raise RiskGuardStop(signal)
 
     def ensure_foreground(self):
         if self.client.foreground_app() != self.BUNDLE_ID: self.client.launch_app(self.BUNDLE_ID)
@@ -74,6 +85,7 @@ class DouyinMobileAdapter:
         self.client.tap(*bounds)
 
     def search(self, query: str):
+        self.search_submitted = False
         tree = self.client.get_ui_tree(); self._check_security(tree)
         field = find_element(tree, types=("XCUIElementTypeSearchField", "XCUIElementTypeTextField", "XCUIElementTypeSecureTextField"))
         if not field: field = find_element(tree, texts=("搜索",))
@@ -84,19 +96,24 @@ class DouyinMobileAdapter:
         submit = find_element(tree, texts=("搜索", "Search"), types=("XCUIElementTypeButton",))
         if submit and node_bounds(submit): self.client.tap(*node_bounds(submit))
         else: raise RuntimeError("search submit locator not found in devicekit UI tree")
+        self.search_submitted = True
 
-    def read_visible_results(self) -> list[Candidate]:
+    def read_visible_results(self, query: str = "") -> list[Candidate]:
         tree = self.client.get_ui_tree(); self._check_security(tree)
-        if not isinstance(tree, dict): return []
+        self.last_result_tree = tree
+        if not isinstance(tree, dict): raise CandidateParseError("UI_TREE_INVALID")
+        containers = [n for n in walk_tree(tree) if n.get("type") in {"XCUIElementTypeScrollView", "XCUIElementTypeCollectionView", "XCUIElementTypeTable"}]
+        if not containers: raise CandidateParseError("RESULT_PAGE_NOT_CONFIRMED")
         candidates = []
         for position, node in enumerate(_candidate_nodes(tree)):
             visible = " ".join(dict.fromkeys(node_text(child) for child in walk_tree(node) if node_text(child)))
-            if not visible or visible in NAV_TEXT: continue
+            if not visible or visible in NAV_TEXT or all(part in NAV_TEXT for part in visible.split()): continue
             fields = [part for part in visible.split(" ") if part not in NAV_TEXT]
             share_url = next((part for part in fields if part.startswith("http")), None)
             raw_id = node.get("rawIdentifier")
             aweme_id = raw_id if isinstance(raw_id, str) and re.fullmatch(r"\d{8,}", raw_id) else None
-            candidates.append(Candidate(title=fields[0] if fields else None, author=None, share_url=share_url, aweme_id=aweme_id, visible_text=visible, position=position, raw=node))
+            if not fields: continue
+            candidates.append(Candidate(query=query, title=fields[0], author=None, share_url=share_url, aweme_id=aweme_id, visible_text=visible, position=position, raw=node))
         return candidates
 
     def scroll_results(self):
