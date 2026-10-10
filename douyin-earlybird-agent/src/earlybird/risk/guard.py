@@ -1,5 +1,6 @@
 from dataclasses import dataclass, field
 from enum import Enum
+from typing import Callable
 
 class RiskDecision(str, Enum):
     ALLOW = "ALLOW"
@@ -22,7 +23,7 @@ class RiskGuard:
     consecutive_failures: int = 0
     events: list[dict] = field(default_factory=list)
     stopped: RiskDecision | None = None
-    event_sink: callable | None = None
+    event_sink: Callable[[dict], None] | None = None
 
     def _stop(self, signal: str, detail: str = "") -> RiskDecision:
         decision = RiskDecision.HUMAN_REQUIRED if signal in {"captcha", "verification", "login_required"} else RiskDecision.RISK_STOP

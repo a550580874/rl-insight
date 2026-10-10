@@ -21,7 +21,7 @@ class SearchRunner:
                 elif state == State.OPEN_SEARCH: self.adapter.open_search()
                 elif state == State.INPUT_QUERY: self.adapter.search(query)
                 elif state == State.READ_RESULTS:
-                    candidates = self.adapter.read_visible_results(); candidates = [c for c in candidates if setattr(c, "query", query) is None]
+                    candidates = self.adapter.read_visible_results(query)
             if not self.guard.record_results(len(candidates)):
                 status = self.guard.stopped.value; states.append(status); self.store.finish_run(run_id, status, 0, len(candidates), status); return {"status": status, "query": query, "states": states}
             if scroll and self.guard.allow_scroll(): states.append(State.OPTIONAL_SCROLL.value); self.adapter.scroll_results()

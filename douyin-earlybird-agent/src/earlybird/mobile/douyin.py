@@ -85,7 +85,7 @@ class DouyinMobileAdapter:
         if submit and node_bounds(submit): self.client.tap(*node_bounds(submit))
         else: raise RuntimeError("search submit locator not found in devicekit UI tree")
 
-    def read_visible_results(self) -> list[Candidate]:
+    def read_visible_results(self, query: str = "") -> list[Candidate]:
         tree = self.client.get_ui_tree(); self._check_security(tree)
         if not isinstance(tree, dict): return []
         candidates = []
@@ -96,7 +96,7 @@ class DouyinMobileAdapter:
             share_url = next((part for part in fields if part.startswith("http")), None)
             raw_id = node.get("rawIdentifier")
             aweme_id = raw_id if isinstance(raw_id, str) and re.fullmatch(r"\d{8,}", raw_id) else None
-            candidates.append(Candidate(title=fields[0] if fields else None, author=None, share_url=share_url, aweme_id=aweme_id, visible_text=visible, position=position, raw=node))
+            candidates.append(Candidate(query=query, title=fields[0] if fields else None, author=None, share_url=share_url, aweme_id=aweme_id, visible_text=visible, position=position, raw=node))
         return candidates
 
     def scroll_results(self):
